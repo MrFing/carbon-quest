@@ -109,7 +109,7 @@ else:
     COMPAT_MODE = True
 
 if FULLSCREEN:
-    SCREEN = pygame.display.set_mode((RENDER_W, RENDER_H), pygame.FULLSCREEN | pygame.HWSURFACE | pygame.DOUBLEBUF)
+    SCREEN = pygame.display.set_mode((RENDER_W, RENDER_H), pygame.NOFRAME | pygame.HWSURFACE | pygame.DOUBLEBUF)
 else:
     SCREEN = pygame.display.set_mode((RENDER_W, RENDER_H), pygame.SCALED | pygame.HWSURFACE | pygame.DOUBLEBUF)
 
@@ -141,6 +141,17 @@ FONT_BODY_BOLD = pygame.font.SysFont("Arial", 20, bold=True)
 FONT_SMALL = pygame.font.SysFont("Arial", 14)
 FONT_SMALL_BOLD = pygame.font.SysFont("Arial", 14, bold=True)
 FONT_TINY = pygame.font.SysFont("Arial", 11)
+FONT_ROUND = pygame.font.SysFont("Arial", 22, bold=True)
+FONT_HEALTH_LABEL = pygame.font.SysFont("Arial", 12, bold=True)
+FONT_ZONE_LABEL = pygame.font.SysFont("Arial", 14)
+FONT_METER_TITLE = pygame.font.SysFont("Arial", 15, bold=True)
+FONT_METER_VALUE = pygame.font.SysFont("Arial", 14)
+FONT_CARD_HEADER = pygame.font.SysFont("Arial", 16, bold=True)
+FONT_CARD_TITLE = pygame.font.SysFont("Arial", 17, bold=True)
+FONT_CARD_TITLE_SMALL = pygame.font.SysFont("Arial", 14, bold=True)
+FONT_CHOICE_NAME = pygame.font.SysFont("Arial", 15, bold=True)
+FONT_BADGE = pygame.font.SysFont("Arial", 12)
+FONT_BUTTON = pygame.font.SysFont("Arial", 14, bold=True)
 
 
 FPS = 60
@@ -162,12 +173,14 @@ ZONE_COLORS = {
 }
 
 HUD_RECT = pygame.Rect(0, 0, BASE_W, 90)
-CITY_PANEL_RECT = pygame.Rect(0, 90, 790, 630)
-RIGHT_PANEL_RECT = pygame.Rect(800, 90, 480, 630)
-METER_CONTAINER_RECT = pygame.Rect(860, 100, 120, 280)
-CARD_PANEL_RECT = pygame.Rect(820, 400, 450, 310)
+CITY_PANEL_RECT = pygame.Rect(0, 90, 900, 630)
+RIGHT_PANEL_RECT = pygame.Rect(910, 90, 370, 630)
+METER_CONTAINER_RECT = pygame.Rect(910, 95, 370, 320)
+CARD_PANEL_RECT = pygame.Rect(918, 415, 354, 300)
 TITLE_PARTICLE_RECT = pygame.Rect(100, 180, BASE_W - 200, 440)
 END_PARTICLE_RECT = pygame.Rect(100, 60, BASE_W - 200, 420)
+CITY_ZONE_LABEL_Y = 698
+CITY_DASH_LINE_Y = 682
 
 
 def clamp(value, low, high):
@@ -203,6 +216,25 @@ def draw_alpha_outline(surface, rect, color, width=1, border_radius=0):
         surface.blit(overlay, rect.topleft)
         return
     pygame.draw.rect(surface, color, rect, width, border_radius=border_radius)
+
+
+def draw_alpha_line(surface, color, start_pos, end_pos, width=1):
+    if len(color) == 4:
+        min_x = min(start_pos[0], end_pos[0]) - width
+        min_y = min(start_pos[1], end_pos[1]) - width
+        max_x = max(start_pos[0], end_pos[0]) + width
+        max_y = max(start_pos[1], end_pos[1]) + width
+        overlay = pygame.Surface((max_x - min_x + 2, max_y - min_y + 2), pygame.SRCALPHA)
+        pygame.draw.line(
+            overlay,
+            color,
+            (start_pos[0] - min_x, start_pos[1] - min_y),
+            (end_pos[0] - min_x, end_pos[1] - min_y),
+            width,
+        )
+        surface.blit(overlay, (min_x, min_y))
+        return
+    pygame.draw.line(surface, color, start_pos, end_pos, width)
 
 
 def draw_shadowed_text(surface, font, text, color, pos, center=False, shadow_offset=2):
@@ -459,6 +491,7 @@ class ParticleSystem:
 class CityRenderer:
     def __init__(self):
         self.area = CITY_PANEL_RECT.copy()
+        self.animation_time = 0.0
         road_top = self.area.height - 94
         base_y = road_top - 8
 
@@ -472,22 +505,22 @@ class CityRenderer:
         self.zone_layout = {
             "Transport": {
                 "buildings": make_cluster(32, [(0, 34, 238, "skyscraper"), (42, 82, 156, "office"), (96, 46, 88, "shop")]),
-                "label_pos": (98, road_top + 30),
+                "label_pos": (112, CITY_ZONE_LABEL_Y - self.area.y),
                 "accent": "transport",
             },
             "Energy": {
-                "buildings": make_cluster(204, [(0, 38, 216, "skyscraper"), (48, 88, 148, "office"), (100, 44, 98, "shop")]),
-                "label_pos": (275, road_top + 30),
+                "buildings": make_cluster(232, [(0, 38, 216, "skyscraper"), (48, 88, 148, "office"), (100, 44, 98, "shop")]),
+                "label_pos": (312, CITY_ZONE_LABEL_Y - self.area.y),
                 "accent": "energy",
             },
             "Waste": {
-                "buildings": make_cluster(382, [(0, 76, 122, "office"), (58, 36, 194, "skyscraper"), (100, 48, 82, "shop")]),
-                "label_pos": (451, road_top + 30),
+                "buildings": make_cluster(432, [(0, 76, 122, "office"), (58, 36, 194, "skyscraper"), (100, 48, 82, "shop")]),
+                "label_pos": (512, CITY_ZONE_LABEL_Y - self.area.y),
                 "accent": "waste",
             },
             "Green Space": {
-                "buildings": make_cluster(540, [(0, 36, 176, "skyscraper"), (44, 80, 132, "office"), (96, 42, 86, "shop")]),
-                "label_pos": (603, road_top + 30),
+                "buildings": make_cluster(632, [(0, 36, 176, "skyscraper"), (44, 80, 132, "office"), (96, 42, 86, "shop")]),
+                "label_pos": (712, CITY_ZONE_LABEL_Y - self.area.y),
                 "accent": "green",
             },
         }
@@ -514,6 +547,7 @@ class CityRenderer:
             self.zone_visuals[zone]["target"] = clamp(score / 4.0, -1.0, 1.0)
 
     def update(self, dt):
+        self.animation_time += dt
         for zone in self.zone_visuals:
             current = self.zone_visuals[zone]["score"]
             target = self.zone_visuals[zone]["target"]
@@ -600,9 +634,9 @@ class CityRenderer:
         pygame.draw.line(surface, (120, 128, 145), (area.left, pavement_rect.y), (area.right, pavement_rect.y), 2)
         pygame.draw.line(surface, (76, 82, 98), (area.left, road_rect.y + 2), (area.right, road_rect.y + 2), 2)
 
-        dash_y = road_rect.y + road_rect.height // 2
-        for dash_x in range(area.left + 24, area.right - 24, 52):
-            pygame.draw.rect(surface, (245, 245, 245), (dash_x, dash_y, 26, 4), border_radius=2)
+        dash_y = area.y + (CITY_DASH_LINE_Y - CITY_PANEL_RECT.y)
+        for dash_x in range(area.left, area.left + 900, 40):
+            pygame.draw.rect(surface, (51, 65, 85), (dash_x, dash_y, 20, 4), border_radius=2)
 
         for zone, data in self.zone_layout.items():
             zone_color = self._zone_color(zone)
@@ -620,7 +654,7 @@ class CityRenderer:
                     pygame.draw.line(surface, (220, 220, 230), (base_x, stem_bottom), (base_x, stem_bottom - 44), 3)
                     center = (base_x, stem_bottom - 44)
                     for angle in (0, 120, 240):
-                        radians = math.radians(angle + pygame.time.get_ticks() * 0.07)
+                        radians = math.radians(angle + self.animation_time * 70.0)
                         tip = (center[0] + math.cos(radians) * 14, center[1] + math.sin(radians) * 14)
                         pygame.draw.line(surface, (230, 230, 240), center, tip, 2)
                     pygame.draw.circle(surface, (230, 230, 240), center, 3)
@@ -636,7 +670,7 @@ class CityRenderer:
                     pygame.draw.circle(surface, zone_color, (tx + 3, pavement_rect.y - 34), 16)
 
             label_pos = (area.x + data["label_pos"][0], area.y + data["label_pos"][1])
-            draw_shadowed_text(surface, FONT_SMALL_BOLD, zone, LIGHT_GRAY, label_pos, center=True)
+            draw_shadowed_text(surface, FONT_ZONE_LABEL, zone, (148, 163, 184), label_pos, center=True)
 
         for tree_x in (area.left + 38, area.left + 186, area.left + 340, area.left + 502, area.left + 640):
             trunk = pygame.Rect(tree_x, pavement_rect.y - 24, 6, 18)
@@ -666,36 +700,43 @@ class CarbonMeter:
 
     def draw(self, surface, warning_active=False):
         frame = self.rect
-        draw_panel(surface, frame, PANEL_COLOR, border_color=(255, 255, 255, 34), radius=16, border_width=1)
+        pygame.draw.rect(surface, PANEL_COLOR, frame, border_radius=16)
+        draw_alpha_outline(surface, frame, (255, 255, 255, 22), width=1, border_radius=16)
         clip_before = push_clip(surface, frame)
 
-        draw_shadowed_text(surface, FONT_SMALL_BOLD, "CARBON LEVEL", LIGHT_GRAY, (frame.centerx, frame.y + 18), center=True)
-        value_text = FONT_BODY_BOLD.render(f"{int(round(self.display_value))}/100", True, WHITE)
-        value_text.set_alpha(220)
-        value_rect = value_text.get_rect(center=(frame.centerx, frame.y + 44))
-        surface.blit(value_text, value_rect)
+        draw_shadowed_text(surface, FONT_METER_TITLE, "CARBON LEVEL", (170, 170, 204), (1095, 108), center=True)
 
-        meter_outer_rect = pygame.Rect(frame.x + 36, frame.y + 68, 48, frame.height - 100)
-        meter_inner_rect = meter_outer_rect.inflate(-10, -10)
-        pygame.draw.rect(surface, (8, 12, 22), meter_outer_rect, border_radius=12)
-        draw_alpha_outline(surface, meter_outer_rect, (255, 255, 255, 51), width=2, border_radius=12)
+        value_pill = pygame.Rect(1035, 120, 120, 24)
+        pygame.draw.rect(surface, (26, 26, 62), value_pill, border_radius=12)
+        draw_alpha_outline(surface, value_pill, (255, 215, 0), width=2, border_radius=12)
+        draw_shadowed_text(surface, FONT_METER_VALUE, f"{int(round(self.display_value))}/100", (255, 215, 0), value_pill.center, center=True)
 
-        fill_height = int((self.display_value / 100.0) * meter_inner_rect.height)
-        meter_bottom = meter_inner_rect.bottom - 1
+        meter_outer_rect = pygame.Rect(1010, 148, 60, 220)
+        meter_inner_rect = pygame.Rect(1012, 150, 56, 216)
+        pygame.draw.rect(surface, (13, 27, 42), meter_outer_rect, border_radius=10)
+        draw_alpha_outline(surface, meter_outer_rect, (51, 68, 102), width=2, border_radius=10)
+
+        fill_height = int((self.display_value / 100.0) * 216)
+        fill_top = 366 - fill_height
         surface.set_clip(meter_inner_rect)
-        for i in range(fill_height):
-            t = i / max(meter_inner_rect.height, 1)
-            r = int(lerp(0, 255, t))
-            g = int(lerp(255, 68, t))
-            b = int(lerp(136, 68, t))
-            y = meter_bottom - i
-            pygame.draw.line(surface, (r, g, b), (meter_inner_rect.x, y), (meter_inner_rect.right - 1, y))
-        surface.set_clip(None)
+        for row_index in range(fill_height):
+            t = row_index / 216
+            r = int(255 * t)
+            g = int(255 * (1 - t))
+            b = 50
+            y = 366 - row_index
+            if fill_top <= y <= 366:
+                pygame.draw.line(surface, (r, g, b), (meter_inner_rect.x, y), (meter_inner_rect.right - 1, y))
+        surface.set_clip(frame)
 
-        for tick in range(0, 101, 25):
-            y = meter_outer_rect.bottom - int((tick / 100.0) * meter_outer_rect.height)
-            pygame.draw.line(surface, (76, 84, 108), (meter_outer_rect.right + 10, y), (meter_outer_rect.right + 22, y), 2)
-            draw_shadowed_text(surface, FONT_SMALL, str(tick), LIGHT_GRAY, (meter_outer_rect.right + 26, y - 8))
+        meter_top = 150
+        meter_bottom = 366
+        meter_height = 216
+        for val in (0, 25, 50, 75, 100):
+            label_y = meter_bottom - int((val / 100) * meter_height)
+            pygame.draw.line(surface, (68, 85, 102), (1072, label_y), (1078, label_y), 1)
+            label_surface = FONT_TINY.render(str(val), True, (136, 153, 170))
+            surface.blit(label_surface, (1082, label_y - 7))
 
         if self.value >= 80:
             pulse = (math.sin(self.pulse_time * 10) + 1) * 0.5
@@ -712,7 +753,7 @@ class HUD:
         self.rect = HUD_RECT.copy()
         self.left_pill = pygame.Rect(10, 26, 200, 38)
         self.right_pill = pygame.Rect(1070, 26, 200, 38)
-        self.health_bar = pygame.Rect(440, 60, 400, 14)
+        self.health_bar = pygame.Rect(440, 53, 400, 14)
 
     def draw(self, surface, players, current_player, round_number, city_health):
         overlay = pygame.Surface(self.rect.size, pygame.SRCALPHA)
@@ -739,15 +780,24 @@ class HUD:
             budget_color = GREEN if player["budget"] >= 40 else YELLOW if player["budget"] >= 15 else RED
             draw_shadowed_text(surface, FONT_SMALL_BOLD, f"{player['budget']}c", budget_color, (pill.right - 58, pill.y + 7))
 
-        draw_shadowed_text(surface, FONT_HEADING, f"Round {round_number} / 15", WHITE, (640, 18), center=True)
-        draw_shadowed_text(surface, FONT_SMALL_BOLD, "CITY HEALTH", LIGHT_GRAY, (640, 44), center=True)
+        round_surface = FONT_ROUND.render(f"Round {round_number} / 15", True, WHITE)
+        round_rect = round_surface.get_rect(center=(640, 18))
+        shadow = FONT_ROUND.render(f"Round {round_number} / 15", True, (0, 0, 0))
+        surface.blit(shadow, round_rect.move(2, 2))
+        surface.blit(round_surface, round_rect)
+
+        health_label = FONT_HEALTH_LABEL.render("CITY HEALTH", True, LIGHT_GRAY)
+        label_rect = health_label.get_rect(center=(640, 44))
+        label_shadow = FONT_HEALTH_LABEL.render("CITY HEALTH", True, (0, 0, 0))
+        surface.blit(label_shadow, label_rect.move(2, 2))
+        surface.blit(health_label, label_rect)
         pygame.draw.rect(surface, PANEL_DARK, self.health_bar, border_radius=8)
         draw_alpha_outline(surface, self.health_bar, (255, 255, 255, 180), width=2, border_radius=8)
         fill_width = int((clamp(city_health, 0, 100) / 100.0) * (self.health_bar.width - 4))
         fill_rect = pygame.Rect(self.health_bar.x + 2, self.health_bar.y + 2, fill_width, self.health_bar.height - 4)
         health_color = GREEN if city_health >= 60 else YELLOW if city_health >= 30 else RED
         pygame.draw.rect(surface, health_color, fill_rect, border_radius=6)
-        draw_shadowed_text(surface, FONT_SMALL, str(int(city_health)), health_color, (self.health_bar.right + 18, self.health_bar.y - 1))
+        draw_shadowed_text(surface, FONT_SMALL, str(int(city_health)), health_color, (self.health_bar.right + 28, self.health_bar.centery), center=True)
         surface.set_clip(clip_before)
 
 
@@ -794,8 +844,8 @@ class CardSystem:
     def update(self, dt, mouse_pos):
         self.slide_progress = min(1.0, self.slide_progress + dt / self.slide_duration)
         frame = self.current_rect()
-        self.eco_button.set_rect((frame.x + 16, frame.y + 246, frame.width - 32, 26))
-        self.quick_button.set_rect((frame.x + 16, frame.y + 278, frame.width - 32, 26))
+        self.eco_button.set_rect((926 + (frame.x - self.card_rect.x), 666, 164, 40))
+        self.quick_button.set_rect((1098 + (frame.x - self.card_rect.x), 666, 164, 40))
         self.eco_button.update(mouse_pos)
         self.quick_button.update(mouse_pos)
 
@@ -813,11 +863,10 @@ class CardSystem:
         return None
 
     def draw_badge(self, surface, x, y, text, color):
-        text_surface = FONT_SMALL.render(text, True, color)
-        badge_rect = pygame.Rect(x, y, text_surface.get_width() + 16, text_surface.get_height() + 8)
-        pygame.draw.rect(surface, PANEL_DARK, badge_rect, border_radius=14)
-        draw_alpha_outline(surface, badge_rect, color, width=2, border_radius=14)
-        draw_shadowed_text(surface, FONT_SMALL, text, color, badge_rect.center, center=True)
+        text_surface = FONT_BADGE.render(text, True, color)
+        badge_rect = pygame.Rect(x, y, text_surface.get_width() + 16, 20)
+        pygame.draw.rect(surface, PANEL_DARK, badge_rect, border_radius=10)
+        draw_shadowed_text(surface, FONT_BADGE, text, color, badge_rect.center, center=True)
         return badge_rect
 
     def draw(self, surface, current_budget):
@@ -825,44 +874,70 @@ class CardSystem:
             return
 
         frame = self.current_rect()
-        draw_panel(surface, frame, PANEL_COLOR, border_color=(255, 255, 255, 34), radius=16, border_width=1)
+        pygame.draw.rect(surface, (17, 24, 39), frame, border_radius=12)
+        draw_alpha_outline(surface, frame, (30, 41, 59), width=1, border_radius=12)
         clip_before = push_clip(surface, frame)
         zone_color = ZONE_COLORS.get(self.current_card.zone, WHITE)
 
-        header_rect = pygame.Rect(frame.x, frame.y, frame.width, 46)
-        pygame.draw.rect(surface, zone_color, header_rect, border_top_left_radius=16, border_top_right_radius=16)
-        icon_rect = pygame.Rect(header_rect.x + 16, header_rect.y + 11, 24, 24)
+        header_rect = pygame.Rect(frame.x, frame.y, 354, 40)
+        pygame.draw.rect(surface, zone_color, header_rect, border_top_left_radius=12, border_top_right_radius=12)
+        icon_rect = pygame.Rect(frame.x + 12, frame.y + 10, 20, 20)
         draw_symbol(surface, zone_icon(self.current_card.zone), icon_rect, PANEL_DARK)
-        draw_shadowed_text(surface, FONT_SMALL_BOLD, self.current_card.zone.upper(), PANEL_DARK, (header_rect.x + 50, header_rect.y + 12))
+        zone_label_rect = FONT_CARD_HEADER.render(self.current_card.zone.upper(), True, WHITE).get_rect(midleft=(frame.x + 40, frame.y + 20))
+        draw_shadowed_text(surface, FONT_CARD_HEADER, self.current_card.zone.upper(), WHITE, zone_label_rect.topleft)
 
-        content_x = frame.x + 16
-        draw_shadowed_text(surface, FONT_BODY_BOLD, self.current_card.title, WHITE, (content_x, frame.y + 60))
-        budget_badge = self.draw_badge(surface, content_x, frame.y + 88, f"Budget {current_budget}", LIGHT_GRAY)
+        title_font = FONT_CARD_TITLE if FONT_CARD_TITLE.size(self.current_card.title)[0] <= 330 else FONT_CARD_TITLE_SMALL
+        draw_shadowed_text(surface, title_font, self.current_card.title, WHITE, (frame.x + 10, frame.y + 50))
 
-        eco_rect = pygame.Rect(content_x, budget_badge.bottom + 10, frame.width - 32, 56)
-        quick_rect = pygame.Rect(content_x, eco_rect.bottom + 10, frame.width - 32, 56)
-        self.draw_choice_panel(surface, eco_rect, self.current_card.eco_choice, GREEN)
-        self.draw_choice_panel(surface, quick_rect, self.current_card.quick_choice, RED)
+        budget_rect = pygame.Rect(frame.x + 10, frame.y + 70, 80, 20)
+        pygame.draw.rect(surface, (17, 24, 39), budget_rect, border_radius=10)
+        draw_alpha_outline(surface, budget_rect, (51, 51, 68), width=1, border_radius=10)
+        draw_shadowed_text(surface, FONT_BADGE, f"Budget {current_budget}", (148, 163, 184), budget_rect.center, center=True)
 
-        self.eco_button.draw(surface, FONT_SMALL_BOLD)
-        self.quick_button.draw(surface, FONT_SMALL_BOLD)
+        eco_rect = pygame.Rect(frame.x + 8, frame.y + 99, 338, 68)
+        quick_rect = pygame.Rect(frame.x + 8, frame.y + 175, 338, 68)
+        self.draw_choice_panel(surface, eco_rect, self.current_card.eco_choice, (34, 197, 94))
+        self.draw_choice_panel(surface, quick_rect, self.current_card.quick_choice, (239, 68, 68))
+
+        self.draw_action_buttons(surface, frame)
         surface.set_clip(clip_before)
 
     def draw_choice_panel(self, surface, rect, choice, accent_color):
-        pygame.draw.rect(surface, PANEL_DARK, rect, border_radius=16)
-        draw_alpha_outline(surface, rect, (255, 255, 255, 34), width=1, border_radius=16)
-        pygame.draw.rect(surface, accent_color, (rect.x, rect.y, 8, rect.height), border_top_left_radius=16, border_bottom_left_radius=16)
-        draw_shadowed_text(surface, FONT_SMALL_BOLD, choice.name, WHITE, (rect.x + 18, rect.y + 7))
+        pygame.draw.rect(surface, (15, 23, 42), rect, border_radius=8)
+        pygame.draw.rect(surface, accent_color, (rect.x, rect.y, 4, rect.height), border_top_left_radius=8, border_bottom_left_radius=8)
+        draw_shadowed_text(surface, FONT_CHOICE_NAME, choice.name, WHITE, (rect.x + 12, rect.y + 6))
 
-        badge_y = rect.y + 28
-        x = rect.x + 18
-        for text, color in (
-            (f"Carbon {choice.carbon:+d}", GREEN if choice.carbon < 0 else RED),
-            (f"Budget {choice.budget:+d}", GREEN if choice.budget > 0 else YELLOW),
-            (f"Health {choice.health:+d}", GREEN if choice.health > 0 else RED),
-        ):
-            badge = self.draw_badge(surface, x, badge_y, text, color)
-            x = badge.right + 8
+        badge_y = rect.y + 30
+        x = rect.x + 12
+        badge_specs = [
+            (f"Carbon {choice.carbon:+d}", (22, 101, 52), (34, 197, 94)),
+            (f"Budget {choice.budget:+d}", (120, 53, 15), (251, 191, 36)),
+            (f"Health {choice.health:+d}", (30, 58, 95), (96, 165, 250)),
+        ]
+        for text, bg_color, text_color in badge_specs:
+            badge = self.draw_stat_badge(surface, x, badge_y, text, bg_color, text_color)
+            x = badge.right + 6
+
+    def draw_stat_badge(self, surface, x, y, text, bg_color, text_color):
+        text_surface = FONT_BADGE.render(text, True, text_color)
+        badge_rect = pygame.Rect(x, y, text_surface.get_width() + 16, 20)
+        pygame.draw.rect(surface, bg_color, badge_rect, border_radius=10)
+        draw_shadowed_text(surface, FONT_BADGE, text, text_color, badge_rect.center, center=True)
+        return badge_rect
+
+    def draw_action_buttons(self, surface, frame):
+        eco_button_rect = pygame.Rect(frame.x + 8, frame.y + 251, 164, 40)
+        quick_button_rect = pygame.Rect(frame.x + 180, frame.y + 251, 164, 40)
+        self.eco_button.set_rect(eco_button_rect)
+        self.quick_button.set_rect(quick_button_rect)
+        pygame.draw.rect(surface, (22, 163, 74), eco_button_rect, border_radius=20)
+        pygame.draw.circle(surface, (74, 222, 128), (eco_button_rect.x + 18, eco_button_rect.y + 20), 8)
+        draw_shadowed_text(surface, FONT_BUTTON, "ECO CHOICE", WHITE, eco_button_rect.center, center=True)
+
+        pygame.draw.rect(surface, (185, 28, 28), quick_button_rect, border_radius=20)
+        lightning_rect = pygame.Rect(quick_button_rect.x + 10, quick_button_rect.y + 10, 16, 20)
+        draw_symbol(surface, "quick", lightning_rect, WHITE)
+        draw_shadowed_text(surface, FONT_BUTTON, "QUICK CHOICE", WHITE, quick_button_rect.center, center=True)
 
 
 class Game:
@@ -870,6 +945,7 @@ class Game:
         self.screen = SCREEN
         self.base_surface = BASE_SURFACE
         self.clock = pygame.time.Clock()
+        self.last_dt = 0.0
         self.hud = HUD()
         self.city = CityRenderer()
         self.carbon_meter = CarbonMeter(METER_CONTAINER_RECT)
@@ -1029,9 +1105,7 @@ class Game:
                     self.play_sound("click")
                     self.running = False
 
-        if self.state == "game":
-            self.card_system.update(self.clock.get_time() / 1000.0, mouse_pos)
-        elif self.state == "end":
+        if self.state == "end":
             self.replay_button.update(mouse_pos)
             self.quit_button.update(mouse_pos)
 
@@ -1040,6 +1114,13 @@ class Game:
         self.carbon_meter.update(dt)
         self.city.update(dt)
         self.particles.update(dt)
+
+        mouse_pos = to_base_pos(pygame.mouse.get_pos())
+        if self.state == "game":
+            self.card_system.update(dt, mouse_pos)
+        elif self.state == "end":
+            self.replay_button.update(mouse_pos)
+            self.quit_button.update(mouse_pos)
 
         if self.state == "title":
             self.compat_overlay_elapsed += dt
@@ -1150,8 +1231,7 @@ class Game:
         pygame.draw.rect(surface, PANEL_DARK, right_bg, border_radius=18)
         draw_alpha_outline(surface, right_bg, (255, 255, 255, 20), width=1, border_radius=18)
 
-        divider_x = CITY_PANEL_RECT.right + 5
-        pygame.draw.line(surface, (125, 146, 190), (divider_x, CITY_PANEL_RECT.top), (divider_x, CITY_PANEL_RECT.bottom), 2)
+        draw_alpha_line(surface, (255, 255, 255, 30), (908, 90), (908, 720), 1)
 
         self.hud.draw(surface, self.players, self.current_player, self.current_round_number(), self.city_health)
 
@@ -1233,6 +1313,10 @@ class Game:
         return lerp_color(YELLOW, RED, (value - 50) / 50.0)
 
     def draw_resolution_debug(self):
+        fps_surface = FONT_TINY.render(f"FPS: {int(self.clock.get_fps())}", True, WHITE)
+        fps_surface.set_alpha(85)
+        self.base_surface.blit(fps_surface, (8, 708))
+
         if not self.show_resolution_debug:
             return
         text = f"{RENDER_W}x{RENDER_H}" + (" [COMPAT]" if COMPAT_MODE else "")
@@ -1263,6 +1347,7 @@ class Game:
     def run(self):
         while self.running:
             dt = self.clock.tick(60) / 1000.0
+            self.last_dt = dt
             self.handle_events()
             self.update(dt)
             self.draw()
@@ -1275,3 +1360,4 @@ if __name__ == "__main__":
     Game().run()
 
 # To build: pyinstaller --onefile --noconsole main.py
+
