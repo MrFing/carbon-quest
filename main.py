@@ -152,6 +152,23 @@ FONT_CARD_TITLE_SMALL = pygame.font.SysFont("Arial", 14, bold=True)
 FONT_CHOICE_NAME = pygame.font.SysFont("Arial", 15, bold=True)
 FONT_BADGE = pygame.font.SysFont("Arial", 12)
 FONT_BUTTON = pygame.font.SysFont("Arial", 14, bold=True)
+FONT_HUD_NAME = pygame.font.SysFont("Arial", 16, bold=True)
+FONT_HUD_BUDGET = pygame.font.SysFont("Arial", 14)
+FONT_HUD_WARNING = pygame.font.SysFont("Arial", 12, bold=True)
+FONT_TURN_INDICATOR = pygame.font.SysFont("Arial", 42, bold=True)
+FONT_END_TITLE = pygame.font.SysFont("Arial", 44, bold=True)
+FONT_END_SUBTITLE = pygame.font.SysFont("Arial", 20)
+FONT_END_BANNER = pygame.font.SysFont("Arial", 32, bold=True)
+FONT_END_BANNER_SUB = pygame.font.SysFont("Arial", 16)
+FONT_END_CARD_TITLE = pygame.font.SysFont("Arial", 24, bold=True)
+FONT_END_CARD_BODY = pygame.font.SysFont("Arial", 18)
+FONT_END_CARD_SMALL = pygame.font.SysFont("Arial", 16)
+FONT_END_BUTTON = pygame.font.SysFont("Arial", 18, bold=True)
+FONT_BANKRUPT_END = pygame.font.SysFont("Arial", 52, bold=True)
+FONT_BANKRUPTCY_TITLE = pygame.font.SysFont("Arial", 64, bold=True)
+FONT_BANKRUPTCY_LINE = pygame.font.SysFont("Arial", 24)
+FONT_BANKRUPTCY_BODY = pygame.font.SysFont("Arial", 18)
+FONT_BANKRUPTCY_HINT = pygame.font.SysFont("Arial", 16)
 
 
 FPS = 60
@@ -170,6 +187,54 @@ ZONE_COLORS = {
     "Energy": (255, 215, 0),
     "Waste": (166, 118, 84),
     "Green Space": (0, 255, 136),
+}
+ECO_COSTS = {
+    "Build a Metro Line": 8500,
+    "Add More Highways": 3000,
+    "Install Bike Lanes": 4200,
+    "Expand Airport": 2500,
+    "Downtown Commute Plan": 5000,
+    "Regional Expansion": 2000,
+    "Build Solar Farm": 12000,
+    "Build Coal Plant": 1800,
+    "Wind Turbines": 9500,
+    "Natural Gas Plant": 2200,
+    "Nuclear Power": 15000,
+    "Geothermal Plant": 11000,
+    "Recycling Program": 3500,
+    "Open Landfill": 1200,
+    "Composting Initiative": 2800,
+    "Waste to Energy Plant": 7000,
+    "Zero Waste Policy": 6500,
+    "Plant Urban Forest": 5500,
+    "Build Shopping Mall": 1500,
+    "Community Solar Garden": 8000,
+    "Green Rooftop Program": 6000,
+    "Urban Farm Network": 4500,
+}
+QUICK_COSTS = {
+    "Build a Metro Line": 1200,
+    "Add More Highways": 800,
+    "Install Bike Lanes": 600,
+    "Expand Airport": 700,
+    "Downtown Commute Plan": 900,
+    "Regional Expansion": 500,
+    "Build Solar Farm": 1500,
+    "Build Coal Plant": 600,
+    "Wind Turbines": 1200,
+    "Natural Gas Plant": 700,
+    "Nuclear Power": 2000,
+    "Geothermal Plant": 1800,
+    "Recycling Program": 500,
+    "Open Landfill": 300,
+    "Composting Initiative": 400,
+    "Waste to Energy Plant": 900,
+    "Zero Waste Policy": 1100,
+    "Plant Urban Forest": 800,
+    "Build Shopping Mall": 400,
+    "Community Solar Garden": 1000,
+    "Green Rooftop Program": 900,
+    "Urban Farm Network": 700,
 }
 
 HUD_RECT = pygame.Rect(0, 0, BASE_W, 90)
@@ -193,6 +258,18 @@ def lerp(a, b, t):
 
 def lerp_color(color_a, color_b, t):
     return tuple(int(lerp(color_a[i], color_b[i], t)) for i in range(3))
+
+
+def format_budget(amount):
+    return f"${amount:,}"
+
+
+def budget_color(amount):
+    if amount < 5000:
+        return (239, 68, 68)
+    if amount <= 15000:
+        return (251, 191, 36)
+    return (34, 197, 94)
 
 
 def to_base_pos(pos):
@@ -253,6 +330,28 @@ def draw_panel(surface, rect, fill_color, border_color=(255, 255, 255, 34), radi
         pygame.draw.rect(surface, SHADOW, rect.move(4, 5), border_radius=radius)
     pygame.draw.rect(surface, fill_color, rect, border_radius=radius)
     draw_alpha_outline(surface, rect, border_color, width=border_width, border_radius=radius)
+
+
+def draw_gradient_rect(surface, rect, start_color, end_color, border_radius=0, vertical=True):
+    gradient = pygame.Surface(rect.size, pygame.SRCALPHA)
+    span = max(1, rect.height - 1 if vertical else rect.width - 1)
+    if vertical:
+        for y in range(rect.height):
+            t = y / span
+            color = lerp_color(start_color, end_color, t)
+            pygame.draw.line(gradient, color, (0, y), (rect.width, y))
+    else:
+        for x in range(rect.width):
+            t = x / span
+            color = lerp_color(start_color, end_color, t)
+            pygame.draw.line(gradient, color, (x, 0), (x, rect.height))
+
+    if border_radius > 0:
+        mask = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=border_radius)
+        gradient.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+
+    surface.blit(gradient, rect.topleft)
 
 
 def draw_symbol(surface, symbol, rect, color):
@@ -316,7 +415,6 @@ def generate_tone(frequency, duration=0.18, volume=0.28):
 class Choice:
     name: str
     carbon: int
-    budget: int
     health: int
 
 
@@ -326,6 +424,8 @@ class DecisionCard:
     title: str
     eco_choice: Choice
     quick_choice: Choice
+    eco_cost: int
+    quick_cost: int
 
 
 class Button:
@@ -751,34 +851,62 @@ class CarbonMeter:
 class HUD:
     def __init__(self):
         self.rect = HUD_RECT.copy()
-        self.left_pill = pygame.Rect(10, 26, 200, 38)
-        self.right_pill = pygame.Rect(1070, 26, 200, 38)
+        self.left_pill = pygame.Rect(10, 12, 210, 48)
+        self.right_pill = pygame.Rect(1060, 12, 210, 48)
         self.health_bar = pygame.Rect(440, 53, 400, 14)
 
-    def draw(self, surface, players, current_player, round_number, city_health):
+    def draw(self, surface, players, current_player, round_number, city_health, flash_bankrupt_index=None, flash_active=False, blink_on=True):
         overlay = pygame.Surface(self.rect.size, pygame.SRCALPHA)
         pygame.draw.rect(overlay, (10, 16, 30, 210), overlay.get_rect())
         surface.blit(overlay, self.rect.topleft)
         pygame.draw.line(surface, (65, 82, 118), (0, self.rect.bottom - 1), (BASE_W, self.rect.bottom - 1), 2)
         clip_before = push_clip(surface, self.rect)
 
-        for idx, pill in enumerate((self.left_pill, self.right_pill)):
+        pill_specs = []
+        for idx, player in enumerate(players):
+            budget_text = format_budget(player["budget"])
+            text_width = max(FONT_HUD_NAME.size(player["name"])[0], FONT_HUD_BUDGET.size(budget_text)[0])
+            width = max(210, text_width + 70)
+            x = 10 if idx == 0 else BASE_W - 10 - width
+            pill_specs.append(pygame.Rect(x, 12, width, 48))
+
+        self.left_pill, self.right_pill = pill_specs
+
+        for idx, pill in enumerate(pill_specs):
             player = players[idx]
             is_current = idx == current_player
-            border = GREEN if is_current else (106, 122, 156)
-            if is_current:
+            flash_this_pill = idx == flash_bankrupt_index and flash_active
+            active_color = GREEN if idx == 0 else (167, 139, 250)
+            inactive_border = (51, 65, 85)
+            inactive_dot = (75, 85, 99)
+            border = RED if flash_this_pill else active_color if is_current else inactive_border
+            border_width = 2 if flash_this_pill else 3 if is_current else 1
+            fill_color = (70, 12, 18) if flash_this_pill else PANEL_COLOR
+            if is_current and not flash_this_pill:
                 glow = pygame.Surface((pill.width + 10, pill.height + 10), pygame.SRCALPHA)
-                pygame.draw.rect(glow, (*GREEN, 60), glow.get_rect(), border_radius=26)
+                pygame.draw.rect(glow, (*active_color, 60), glow.get_rect(), border_radius=26)
                 surface.blit(glow, (pill.x - 5, pill.y - 5))
-            pygame.draw.rect(surface, PANEL_COLOR, pill, border_radius=22)
-            draw_alpha_outline(surface, pill, border, width=2, border_radius=22)
-            dot_color = GREEN if is_current else (96, 108, 132)
-            pygame.draw.circle(surface, dot_color, (pill.x + 16, pill.centery), 6)
-            if is_current:
-                pygame.draw.circle(surface, WHITE, (pill.x + 16, pill.centery), 2)
-            draw_shadowed_text(surface, FONT_SMALL_BOLD, player["name"], WHITE, (pill.x + 28, pill.y + 7))
-            budget_color = GREEN if player["budget"] >= 40 else YELLOW if player["budget"] >= 15 else RED
-            draw_shadowed_text(surface, FONT_SMALL_BOLD, f"{player['budget']}c", budget_color, (pill.right - 58, pill.y + 7))
+            elif flash_this_pill:
+                glow = pygame.Surface((pill.width + 16, pill.height + 16), pygame.SRCALPHA)
+                pygame.draw.rect(glow, (239, 68, 68, 90), glow.get_rect(), border_radius=28)
+                surface.blit(glow, (pill.x - 8, pill.y - 8))
+            pygame.draw.rect(surface, fill_color, pill, border_radius=22)
+            draw_alpha_outline(surface, pill, border, width=border_width, border_radius=22)
+            dot_color = RED if flash_this_pill else active_color if is_current else inactive_dot
+            pygame.draw.circle(surface, dot_color, (pill.x + 18, pill.y + 18), 6)
+            draw_shadowed_text(surface, FONT_HUD_NAME, player["name"], WHITE, (pill.x + 32, pill.y + 6))
+            draw_shadowed_text(surface, FONT_HUD_BUDGET, format_budget(player["budget"]), budget_color(player["budget"]), (pill.x + 32, pill.y + 26))
+
+            warning_text = None
+            warning_color = None
+            if player["budget"] < 5000:
+                warning_text = "⚠ Critical Funds!"
+                warning_color = (239, 68, 68)
+            elif player["budget"] < 15000:
+                warning_text = "⚠ Low Funds"
+                warning_color = (251, 191, 36)
+            if warning_text and blink_on:
+                draw_shadowed_text(surface, FONT_HUD_WARNING, warning_text, warning_color, (pill.centerx, pill.bottom + 2), center=True, shadow_offset=1)
 
         round_surface = FONT_ROUND.render(f"Round {round_number} / 15", True, WHITE)
         round_rect = round_surface.get_rect(center=(640, 18))
@@ -814,20 +942,38 @@ class CardSystem:
         self.show_card(random.randint(0, len(self.cards) - 1))
 
     def _build_cards(self):
+        def make_choice(name, carbon, health):
+            return Choice(name, carbon, health)
+
+        def lookup_cost(cost_table, primary_name, fallback_name):
+            if fallback_name in cost_table:
+                return cost_table[fallback_name]
+            return cost_table.get(primary_name, 1000)
+
+        def make_card(zone, title, eco_name, eco_carbon, eco_health, quick_name, quick_carbon, quick_health):
+            return DecisionCard(
+                zone,
+                title,
+                make_choice(eco_name, eco_carbon, eco_health),
+                make_choice(quick_name, quick_carbon, quick_health),
+                lookup_cost(ECO_COSTS, eco_name, title),
+                lookup_cost(QUICK_COSTS, quick_name, title),
+            )
+
         return [
-            DecisionCard("Transport", "Downtown Commute Plan", Choice("Build a Metro Line", -8, -20, 5), Choice("Add More Highways", 10, -15, -3)),
-            DecisionCard("Transport", "Neighborhood Streets", Choice("Install Bike Lanes", -5, -8, 3), Choice("Add More Highways", 10, -15, -3)),
-            DecisionCard("Transport", "Regional Expansion", Choice("Build a Metro Line", -8, -20, 5), Choice("Expand Airport", 12, -25, -2)),
-            DecisionCard("Energy", "Power Grid Upgrade", Choice("Build Solar Farm", -10, -30, 8), Choice("Build Coal Plant", 15, -10, -10)),
-            DecisionCard("Energy", "Future Energy Mix", Choice("Wind Turbines", -8, -25, 6), Choice("Natural Gas Plant", 8, -12, -4)),
-            DecisionCard("Energy", "Industrial Demand Spike", Choice("Build Solar Farm", -10, -30, 8), Choice("Natural Gas Plant", 8, -12, -4)),
-            DecisionCard("Energy", "Regional Reliability Vote", Choice("Wind Turbines", -8, -25, 6), Choice("Build Coal Plant", 15, -10, -10)),
-            DecisionCard("Waste", "Community Waste Strategy", Choice("Recycling Program", -4, -10, 4), Choice("Open Landfill", 6, -5, -5)),
-            DecisionCard("Waste", "Food Waste Response", Choice("Composting Initiative", -3, -8, 3), Choice("Open Landfill", 6, -5, -5)),
-            DecisionCard("Waste", "School Sustainability Drive", Choice("Recycling Program", -4, -10, 4), Choice("Open Landfill", 6, -5, -5)),
-            DecisionCard("Green Space", "Vacant Lot Decision", Choice("Plant Urban Forest", -7, -15, 7), Choice("Build Shopping Mall", 9, 10, -6)),
-            DecisionCard("Green Space", "Riverfront Redevelopment", Choice("Plant Urban Forest", -7, -15, 7), Choice("Build Shopping Mall", 9, 10, -6)),
-            DecisionCard("Transport", "Tourism Growth Debate", Choice("Install Bike Lanes", -5, -8, 3), Choice("Expand Airport", 12, -25, -2)),
+            make_card("Transport", "Downtown Commute Plan", "Build a Metro Line", -8, 5, "Add More Highways", 10, -3),
+            make_card("Transport", "Neighborhood Streets", "Install Bike Lanes", -5, 3, "Add More Highways", 10, -3),
+            make_card("Transport", "Regional Expansion", "Build a Metro Line", -8, 5, "Expand Airport", 12, -2),
+            make_card("Energy", "Power Grid Upgrade", "Build Solar Farm", -10, 8, "Build Coal Plant", 15, -10),
+            make_card("Energy", "Future Energy Mix", "Wind Turbines", -8, 6, "Natural Gas Plant", 8, -4),
+            make_card("Energy", "Industrial Demand Spike", "Build Solar Farm", -10, 8, "Natural Gas Plant", 8, -4),
+            make_card("Energy", "Regional Reliability Vote", "Wind Turbines", -8, 6, "Build Coal Plant", 15, -10),
+            make_card("Waste", "Community Waste Strategy", "Recycling Program", -4, 4, "Open Landfill", 6, -5),
+            make_card("Waste", "Food Waste Response", "Composting Initiative", -3, 3, "Open Landfill", 6, -5),
+            make_card("Waste", "School Sustainability Drive", "Recycling Program", -4, 4, "Open Landfill", 6, -5),
+            make_card("Green Space", "Vacant Lot Decision", "Plant Urban Forest", -7, 7, "Build Shopping Mall", 9, -6),
+            make_card("Green Space", "Riverfront Redevelopment", "Plant Urban Forest", -7, 7, "Build Shopping Mall", 9, -6),
+            make_card("Transport", "Tourism Growth Debate", "Install Bike Lanes", -5, 3, "Expand Airport", 12, -2),
         ]
 
     def show_card(self, index=None):
@@ -888,11 +1034,10 @@ class CardSystem:
 
         title_font = FONT_CARD_TITLE if FONT_CARD_TITLE.size(self.current_card.title)[0] <= 330 else FONT_CARD_TITLE_SMALL
         draw_shadowed_text(surface, title_font, self.current_card.title, WHITE, (frame.x + 10, frame.y + 50))
-
-        budget_rect = pygame.Rect(frame.x + 10, frame.y + 70, 80, 20)
-        pygame.draw.rect(surface, (17, 24, 39), budget_rect, border_radius=10)
-        draw_alpha_outline(surface, budget_rect, (51, 51, 68), width=1, border_radius=10)
-        draw_shadowed_text(surface, FONT_BADGE, f"Budget {current_budget}", (148, 163, 184), budget_rect.center, center=True)
+        eco_cost_text = FONT_BADGE.render(f"ECO CHOICE: {format_budget(self.current_card.eco_cost)}", True, (74, 222, 128))
+        quick_cost_text = FONT_BADGE.render(f"QUICK CHOICE: {format_budget(self.current_card.quick_cost)}", True, (251, 146, 60))
+        surface.blit(eco_cost_text, (frame.x + 10, frame.y + 74))
+        surface.blit(quick_cost_text, (frame.right - 10 - quick_cost_text.get_width(), frame.y + 74))
 
         eco_rect = pygame.Rect(frame.x + 8, frame.y + 99, 338, 68)
         quick_rect = pygame.Rect(frame.x + 8, frame.y + 175, 338, 68)
@@ -911,7 +1056,6 @@ class CardSystem:
         x = rect.x + 12
         badge_specs = [
             (f"Carbon {choice.carbon:+d}", (22, 101, 52), (34, 197, 94)),
-            (f"Budget {choice.budget:+d}", (120, 53, 15), (251, 191, 36)),
             (f"Health {choice.health:+d}", (30, 58, 95), (96, 165, 250)),
         ]
         for text, bg_color, text_color in badge_specs:
@@ -959,6 +1103,7 @@ class Game:
             "quick": generate_tone(240, 0.20, 0.34),
             "warning": generate_tone(920, 0.12, 0.26),
             "click": generate_tone(500, 0.08, 0.22),
+            "funds": generate_tone(1180, 0.10, 0.26),
         }
 
         self.show_resolution_debug = True
@@ -967,6 +1112,7 @@ class Game:
         self.warning_played = False
         self.shake_time = 0.0
         self.shake_strength = 0.0
+        self.shake_duration = 0.45
         self.title_float = 0.0
         self.compat_overlay_elapsed = 0.0
         self.running = True
@@ -975,9 +1121,14 @@ class Game:
     def reset_game(self):
         self.state = "title"
         self.players = [
-            {"name": "Player 1", "budget": 100, "eco": 0, "quick": 0, "decisions": 0},
-            {"name": "Player 2", "budget": 100, "eco": 0, "quick": 0, "decisions": 0},
+            {"name": "Player 1", "budget": 100000, "eco": 0, "quick": 0, "decisions": 0},
+            {"name": "Player 2", "budget": 100000, "eco": 0, "quick": 0, "decisions": 0},
         ]
+        self.player1_carbon_contribution = 0
+        self.player2_carbon_contribution = 0
+        self.bankrupt_player_index = None
+        self.bankruptcy_timer = 0.0
+        self.critical_budget_warned = [False, False]
         self.current_player = 0
         self.completed_rounds = 0
         self.city_health = 100
@@ -991,9 +1142,11 @@ class Game:
         self.warning_played = False
         self.shake_time = 0.0
         self.shake_strength = 0.0
+        self.shake_duration = 0.45
         self.title_particles_timer = 0.0
         self.end_particles_timer = 0.0
         self.compat_overlay_elapsed = 0.0
+        self.end_cause = None
         self.result = {"title": "", "subtitle": ""}
 
     def play_sound(self, key):
@@ -1009,14 +1162,36 @@ class Game:
     def current_round_number(self):
         return min(15, self.completed_rounds + 1)
 
+    def trigger_bankruptcy(self, player_index):
+        self.players[player_index]["budget"] = 0
+        self.bankrupt_player_index = player_index
+        self.bankruptcy_timer = 0.0
+        self.end_cause = "bankruptcy"
+        self.state = "bankruptcy"
+        self.shake_strength = 8
+        self.shake_time = 1.5
+        self.shake_duration = 1.5
+
+    def maybe_warn_low_budget(self, player_index, previous_budget):
+        current_budget = self.players[player_index]["budget"]
+        if current_budget < 5000 <= previous_budget and not self.critical_budget_warned[player_index]:
+            self.play_sound("funds")
+            self.critical_budget_warned[player_index] = True
+
     def apply_choice(self, choice_type):
         card = self.card_system.current_card
         choice = card.eco_choice if choice_type == "eco" else card.quick_choice
         player = self.players[self.current_player]
+        choice_cost = card.eco_cost if choice_type == "eco" else card.quick_cost
 
-        player["budget"] = clamp(player["budget"] + choice.budget, 0, 250)
+        previous_budget = player["budget"]
+        player["budget"] = max(0, player["budget"] - choice_cost)
         player["decisions"] += 1
         player[choice_type] += 1
+        if self.current_player == 0:
+            self.player1_carbon_contribution += choice.carbon
+        else:
+            self.player2_carbon_contribution += choice.carbon
 
         self.carbon_level = clamp(self.carbon_level + choice.carbon, 0, 100)
         self.city_health = clamp(self.city_health + choice.health, 0, 100)
@@ -1037,9 +1212,16 @@ class Game:
         if self.carbon_level >= 80:
             self.shake_strength = 8 if self.carbon_level < 100 else 14
             self.shake_time = 0.45
+            self.shake_duration = 0.45
         elif choice_type == "quick":
             self.shake_strength = 4
             self.shake_time = 0.18
+            self.shake_duration = 0.18
+
+        self.maybe_warn_low_budget(self.current_player, previous_budget)
+        if player["budget"] <= 0:
+            self.trigger_bankruptcy(self.current_player)
+            return
 
         if self._check_immediate_end():
             return
@@ -1055,6 +1237,7 @@ class Game:
         self.card_system.show_card()
 
     def finish_by_rounds(self):
+        self.end_cause = "rounds_complete"
         if self.carbon_level < 60:
             self.result = {"title": "Green City", "subtitle": "Your city balanced growth and sustainability."}
         elif self.carbon_level < 80:
@@ -1066,11 +1249,13 @@ class Game:
 
     def _check_immediate_end(self):
         if self.carbon_level >= 100:
+            self.end_cause = "collapse"
             self.result = {"title": "City Collapsed", "subtitle": "Carbon overload pushed the city past the breaking point."}
             self.state = "end"
             self.particles = ParticleSystem()
             return True
         if self.city_health <= 0:
+            self.end_cause = "health"
             self.result = {"title": "Health Crisis", "subtitle": "The city could not withstand the environmental damage."}
             self.state = "end"
             self.particles = ParticleSystem()
@@ -1092,6 +1277,11 @@ class Game:
                 elif self.state == "title" and event.key == pygame.K_SPACE:
                     self.play_sound("click")
                     self.start_gameplay()
+                elif self.state == "bankruptcy" and event.key == pygame.K_SPACE:
+                    self.play_sound("click")
+                    self.state = "end"
+                    self.end_particles_timer = 0.0
+                    self.particles = ParticleSystem()
             elif self.state == "game":
                 choice = self.card_system.handle_event(event, base_event_pos)
                 if choice:
@@ -1121,6 +1311,8 @@ class Game:
         elif self.state == "end":
             self.replay_button.update(mouse_pos)
             self.quit_button.update(mouse_pos)
+        elif self.state == "bankruptcy":
+            self.bankruptcy_timer += dt
 
         if self.state == "title":
             self.compat_overlay_elapsed += dt
@@ -1136,7 +1328,7 @@ class Game:
                 self.warning_played = False
         elif self.state == "end":
             self.end_particles_timer += dt
-            if "Green" in self.result["title"] or "Recovering" in self.result["title"]:
+            if self.end_cause == "rounds_complete" and self.carbon_level < 80:
                 while self.end_particles_timer >= 0.12:
                     self.end_particles_timer -= 0.12
                     self.particles.spawn_celebration(END_PARTICLE_RECT.move(0, -10), count=12)
@@ -1153,7 +1345,7 @@ class Game:
     def game_offset(self):
         if self.shake_time <= 0:
             return (0, 0)
-        strength = self.shake_strength * (self.shake_time / 0.45)
+        strength = self.shake_strength * (self.shake_time / max(self.shake_duration, 0.001))
         return (random.uniform(-strength, strength), random.uniform(-strength * 0.6, strength * 0.6))
 
     def draw_title(self):
@@ -1225,7 +1417,14 @@ class Game:
     def draw_game(self):
         surface = self.base_surface
         surface.fill(BG_COLOR)
-        shake_offset = self.game_offset()
+        shake_offset = self.game_offset() if self.state == "game" else (0, 0)
+        blink_on = int(self.title_float / 0.5) % 2 == 0
+        flash_active = (
+            self.state == "bankruptcy"
+            and self.bankrupt_player_index is not None
+            and self.bankruptcy_timer < 1.5
+            and int(self.bankruptcy_timer / 0.25) % 2 == 0
+        )
 
         right_bg = RIGHT_PANEL_RECT.copy()
         pygame.draw.rect(surface, PANEL_DARK, right_bg, border_radius=18)
@@ -1233,76 +1432,295 @@ class Game:
 
         draw_alpha_line(surface, (255, 255, 255, 30), (908, 90), (908, 720), 1)
 
-        self.hud.draw(surface, self.players, self.current_player, self.current_round_number(), self.city_health)
+        self.hud.draw(
+            surface,
+            self.players,
+            self.current_player,
+            self.current_round_number(),
+            self.city_health,
+            flash_bankrupt_index=self.bankrupt_player_index,
+            flash_active=flash_active,
+            blink_on=blink_on,
+        )
 
         city_clip = push_clip(surface, CITY_PANEL_RECT)
         self.city.draw(surface, self.carbon_level, offset=shake_offset)
         self.particles.draw(surface, offset=shake_offset)
+        self.draw_turn_indicator(surface)
         surface.set_clip(city_clip)
 
         self.carbon_meter.draw(surface, warning_active=self.carbon_level >= 80)
         self.card_system.draw(surface, self.players[self.current_player]["budget"])
 
-    def eco_rating(self):
-        total_decisions = sum(player["decisions"] for player in self.players)
-        eco_choices = sum(player["eco"] for player in self.players)
-        ratio = eco_choices / total_decisions if total_decisions else 0.5
-        if ratio >= 0.6:
-            return "\U0001F331 Green Hero", GREEN
-        if ratio >= 0.4:
-            return "\u26A0\uFE0F City Planner", YELLOW
-        return "\u2620\uFE0F Carbon Criminal", RED
+    def draw_turn_indicator(self, surface):
+        center_x = CITY_PANEL_RECT.width // 2
+        center_y = 200
+        player_name = "Player 1" if self.current_player == 0 else "Player 2"
+        player_color = GREEN if self.current_player == 0 else (167, 139, 250)
+        text = f"{player_name}'s Turn"
+        text_width, text_height = FONT_TURN_INDICATOR.size(text)
+
+        pill_rect = pygame.Rect(0, 0, text_width + 40, 52)
+        pill_rect.center = (center_x, center_y)
+        pill_surface = pygame.Surface(pill_rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(pill_surface, (0, 0, 0), pill_surface.get_rect(), border_radius=26)
+        pill_surface.set_alpha(120)
+        surface.blit(pill_surface, pill_rect.topleft)
+
+        pulse = math.sin(pygame.time.get_ticks() / 400.0)
+        alpha_value = int(180 + ((pulse + 1.0) * 0.5 * 75))
+        text_start_x = center_x - text_width // 2
+        dot_radius = int(10 + pulse * 2)
+
+        dot_surface = pygame.Surface((32, 32), pygame.SRCALPHA)
+        pygame.draw.circle(dot_surface, player_color, (16, 16), max(8, min(12, dot_radius)))
+        dot_surface.set_alpha(alpha_value)
+        surface.blit(dot_surface, (text_start_x - 36, center_y - 16))
+
+        text_surface = FONT_TURN_INDICATOR.render(text, True, player_color)
+        text_surface.set_alpha(alpha_value)
+        text_rect = text_surface.get_rect(center=(center_x, center_y))
+        surface.blit(text_surface, text_rect)
+
+    def winner_summary(self):
+        if self.end_cause == "bankruptcy" and self.bankrupt_player_index is not None:
+            winner_index = 1 - self.bankrupt_player_index
+            return {
+                "index": winner_index,
+                "name": self.players[winner_index]["name"],
+                "reason": "managed the budget better",
+                "loser": self.players[self.bankrupt_player_index]["name"],
+            }
+
+        contribution_a = self.player1_carbon_contribution
+        contribution_b = self.player2_carbon_contribution
+        if contribution_a < contribution_b:
+            return {"index": 0, "name": "Player 1", "reason": "made greener decisions", "loser": "Player 2"}
+        if contribution_b < contribution_a:
+            return {"index": 1, "name": "Player 2", "reason": "made greener decisions", "loser": "Player 1"}
+
+        eco_a = self.players[0]["eco"]
+        eco_b = self.players[1]["eco"]
+        if eco_a > eco_b:
+            return {"index": 0, "name": "Player 1", "reason": "made more eco choices", "loser": "Player 2"}
+        if eco_b > eco_a:
+            return {"index": 1, "name": "Player 2", "reason": "made more eco choices", "loser": "Player 1"}
+
+        if self.players[0]["budget"] > self.players[1]["budget"]:
+            return {"index": 0, "name": "Player 1", "reason": "managed funds better", "loser": "Player 2"}
+        if self.players[1]["budget"] > self.players[0]["budget"]:
+            return {"index": 1, "name": "Player 2", "reason": "managed funds better", "loser": "Player 1"}
+        return {"index": None, "name": None, "reason": None, "loser": None}
+
+    def player_eco_rating(self, player):
+        ratio = player["eco"] / max(1, player["decisions"])
+        if ratio >= 0.75:
+            return "🌱 Green Hero", (74, 222, 128)
+        if ratio >= 0.5:
+            return "♻️ Eco Planner", (163, 230, 53)
+        if ratio >= 0.25:
+            return "⚠️ City Planner", (251, 191, 36)
+        return "☠️ Carbon Criminal", (248, 113, 113)
+
+    def end_screen_summary(self):
+        if self.end_cause == "bankruptcy":
+            return {
+                "title": "BANKRUPT!",
+                "title_color": (239, 68, 68),
+                "subtitle": "Financial collapse halted the challenge.",
+            }
+        if self.end_cause == "collapse":
+            return {
+                "title": "City Collapsed!",
+                "title_color": (239, 68, 68),
+                "subtitle": "Carbon overload destroyed the city.",
+            }
+        if self.end_cause == "rounds_complete":
+            if self.carbon_level < 60:
+                subtitle = "Green City! Outstanding teamwork."
+            elif self.carbon_level < 80:
+                subtitle = "Recovering City. Room to improve."
+            else:
+                subtitle = "City in Crisis. Barely made it."
+            return {
+                "title": "City Survived!",
+                "title_color": (34, 197, 94),
+                "subtitle": subtitle,
+            }
+        return {
+            "title": "City Collapsed!",
+            "title_color": (239, 68, 68),
+            "subtitle": "The city could not survive the environmental damage.",
+        }
+
+    def draw_bankruptcy_overlay(self):
+        surface = self.base_surface
+        overlay = pygame.Surface((BASE_W, BASE_H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        surface.blit(overlay, (0, 0))
+
+        panel = pygame.Rect(240, 200, 800, 320)
+        pygame.draw.rect(surface, (26, 0, 0), panel, border_radius=20)
+        draw_alpha_outline(surface, panel, (239, 68, 68), width=3, border_radius=20)
+
+        pulse_scale = 1.0 + math.sin(self.bankruptcy_timer * 4.0) * 0.05
+        title_surface = FONT_BANKRUPTCY_TITLE.render("BANKRUPT!", True, (239, 68, 68))
+        scaled_size = (
+            max(1, int(title_surface.get_width() * pulse_scale)),
+            max(1, int(title_surface.get_height() * pulse_scale)),
+        )
+        pulsed_title = pygame.transform.smoothscale(title_surface, scaled_size)
+        title_rect = pulsed_title.get_rect(center=(640, 260))
+        shadow = pygame.transform.smoothscale(FONT_BANKRUPTCY_TITLE.render("BANKRUPT!", True, (0, 0, 0)), scaled_size)
+        surface.blit(shadow, title_rect.move(3, 3))
+        surface.blit(pulsed_title, title_rect)
+
+        bankrupt_name = self.players[self.bankrupt_player_index]["name"] if self.bankrupt_player_index is not None else "A player"
+        draw_shadowed_text(surface, FONT_BANKRUPTCY_LINE, f"{bankrupt_name} has run out of money!", (252, 165, 165), (640, 340), center=True)
+        draw_shadowed_text(surface, FONT_BANKRUPTCY_BODY, "The city cannot sustain further investment.", (148, 163, 184), (640, 390), center=True)
+        if int(self.bankruptcy_timer / 0.5) % 2 == 0:
+            draw_shadowed_text(surface, FONT_BANKRUPTCY_HINT, "Press SPACE to see results", (100, 116, 139), (640, 440), center=True)
+
+    def draw_trophy_icon(self, surface, center):
+        cup_color = (255, 215, 0)
+        pygame.draw.circle(surface, cup_color, (center[0], center[1] - 10), 14)
+        pygame.draw.rect(surface, cup_color, (center[0] - 10, center[1] + 2, 20, 18), border_radius=4)
+        pygame.draw.rect(surface, cup_color, (center[0] - 4, center[1] + 18, 8, 10), border_radius=3)
+        pygame.draw.rect(surface, (210, 160, 30), (center[0] - 14, center[1] + 26, 28, 6), border_radius=3)
+
+    def draw_end_button(self, surface, button, base_color, hover_color):
+        rect = button.rect
+        fill = hover_color if button.hovered else base_color
+        if button.hovered:
+            glow_rect = rect.inflate(18, 18)
+            glow = pygame.Surface(glow_rect.size, pygame.SRCALPHA)
+            pygame.draw.rect(glow, (*base_color, 70), glow.get_rect(), border_radius=30)
+            surface.blit(glow, glow_rect.topleft)
+        pygame.draw.rect(surface, SHADOW, rect.move(0, 4), border_radius=24)
+        pygame.draw.rect(surface, fill, rect, border_radius=24)
+        draw_alpha_outline(surface, rect, (255, 255, 255, 180), width=2, border_radius=24)
+        draw_shadowed_text(surface, FONT_END_BUTTON, button.text, WHITE, rect.center, center=True)
+
+    def draw_end_player_card(self, surface, rect, player, contribution, winner_index, player_index):
+        is_draw = winner_index is None
+        is_winner = winner_index == player_index
+        is_bankrupt = self.end_cause == "bankruptcy" and self.bankrupt_player_index == player_index
+        border_color = (148, 163, 184) if is_draw else (34, 197, 94) if is_winner else (239, 68, 68)
+        fill_color = (26, 0, 0) if is_bankrupt else (15, 23, 42)
+
+        if is_winner:
+            for inflate_by, alpha in ((10, 72), (20, 42), (30, 22)):
+                glow_rect = rect.inflate(inflate_by, inflate_by)
+                draw_alpha_outline(surface, glow_rect, (*border_color, alpha), width=1, border_radius=16)
+
+        pygame.draw.rect(surface, fill_color, rect, border_radius=12)
+        draw_alpha_outline(surface, rect, border_color, width=2, border_radius=12)
+        clip_before = push_clip(surface, rect)
+
+        draw_shadowed_text(surface, FONT_END_CARD_TITLE, player["name"], WHITE, (rect.x + 20, rect.y + 18))
+        if is_bankrupt:
+            badge_rect = pygame.Rect(rect.right - 146, rect.y + 14, 126, 26)
+            pygame.draw.rect(surface, (127, 29, 29), badge_rect, border_radius=13)
+            draw_alpha_outline(surface, badge_rect, (239, 68, 68), width=1, border_radius=13)
+            draw_shadowed_text(surface, FONT_HUD_WARNING, "💸 BANKRUPT", (254, 202, 202), badge_rect.center, center=True, shadow_offset=1)
+
+        draw_shadowed_text(surface, FONT_END_CARD_SMALL, f"Total decisions: {player['decisions']}", LIGHT_GRAY, (rect.x + 20, rect.y + 56))
+        draw_shadowed_text(surface, FONT_END_CARD_SMALL, f"Eco choices: {player['eco']}", GREEN, (rect.x + 20, rect.y + 82))
+        draw_shadowed_text(surface, FONT_END_CARD_SMALL, f"Quick choices: {player['quick']}", RED, (rect.x + 20, rect.y + 108))
+
+        if contribution < 0:
+            impact_color = GREEN
+        elif contribution > 0:
+            impact_color = RED
+        else:
+            impact_color = LIGHT_GRAY
+        draw_shadowed_text(
+            surface,
+            FONT_END_CARD_SMALL,
+            f"Carbon Impact: {contribution:+d}",
+            impact_color,
+            (rect.x + 20, rect.y + 134),
+        )
+        if is_bankrupt:
+            budget_text = "$0 — Out of funds"
+            budget_text_color = (239, 68, 68)
+        elif self.end_cause == "bankruptcy" and is_winner:
+            budget_text = f"{format_budget(player['budget'])} remaining"
+            budget_text_color = (34, 197, 94)
+        else:
+            budget_text = f"Final Budget: {format_budget(player['budget'])}"
+            budget_text_color = budget_color(player["budget"])
+        draw_shadowed_text(surface, FONT_END_CARD_SMALL, budget_text, budget_text_color, (rect.x + 20, rect.y + 158))
+        surface.set_clip(clip_before)
 
     def draw_end(self):
         surface = self.base_surface
         surface.fill(BG_COLOR)
-        result_is_good = "Green" in self.result["title"] or "Recovering" in self.result["title"]
+        summary = self.end_screen_summary()
+        winner = self.winner_summary()
 
-        panel = pygame.Rect(92, 64, 1096, 594)
-        accent = GREEN if result_is_good else RED
-        draw_panel(surface, panel, PANEL_COLOR, accent, radius=28, border_width=2)
+        panel = pygame.Rect(70, 40, 1140, 668)
+        border_width = 3 if self.end_cause == "bankruptcy" else 2
+        border_color = (239, 68, 68) if self.end_cause == "bankruptcy" else (*summary["title_color"], 255)
+        draw_panel(surface, panel, PANEL_COLOR, border_color, radius=26, border_width=border_width)
         clip_before = push_clip(surface, panel)
 
-        overlay = pygame.Surface(panel.size, pygame.SRCALPHA)
-        pygame.draw.rect(overlay, (*accent, 24), overlay.get_rect(), border_radius=28)
-        surface.blit(overlay, panel.topleft)
+        glow_overlay = pygame.Surface(panel.size, pygame.SRCALPHA)
+        pygame.draw.rect(glow_overlay, (*summary["title_color"], 22), glow_overlay.get_rect(), border_radius=26)
+        surface.blit(glow_overlay, panel.topleft)
 
-        draw_shadowed_text(surface, FONT_TITLE, self.result["title"], accent, (BASE_W // 2, 126), center=True)
-        draw_shadowed_text(surface, FONT_BODY_BOLD, self.result["subtitle"], WHITE, (BASE_W // 2, 174), center=True)
+        title_font = FONT_BANKRUPT_END if self.end_cause == "bankruptcy" else FONT_END_TITLE
+        draw_shadowed_text(surface, title_font, summary["title"], summary["title_color"], (BASE_W // 2, 118), center=True)
+        draw_shadowed_text(surface, FONT_END_SUBTITLE, summary["subtitle"], WHITE, (BASE_W // 2, 168), center=True)
+        if self.end_cause == "collapse" and winner["name"]:
+            draw_shadowed_text(surface, FONT_END_SUBTITLE, f"But {winner['name']} played better!", YELLOW, (BASE_W // 2, 212), center=True)
 
-        rating_text, rating_color = self.eco_rating()
-        rating_rect = pygame.Rect(BASE_W // 2 - 170, 204, 340, 40)
-        pygame.draw.rect(surface, PANEL_DARK, rating_rect, border_radius=20)
-        draw_alpha_outline(surface, rating_rect, rating_color, width=2, border_radius=20)
-        draw_shadowed_text(surface, FONT_BODY_BOLD, rating_text, rating_color, rating_rect.center, center=True)
+        banner_rect = pygame.Rect((BASE_W - 700) // 2, 280, 700, 100)
+        if winner["name"]:
+            if self.end_cause == "bankruptcy":
+                pygame.draw.rect(surface, (20, 83, 45), banner_rect, border_radius=16)
+                draw_alpha_outline(surface, banner_rect, (34, 197, 94), width=2, border_radius=16)
+                draw_shadowed_text(surface, pygame.font.SysFont("Arial", 36, bold=True), f"🏆 {winner['name']} Wins!", WHITE, (banner_rect.centerx, banner_rect.y + 30), center=True)
+                draw_shadowed_text(surface, FONT_END_SUBTITLE, f"{winner['loser']} ran out of money!", (252, 165, 165), (banner_rect.centerx, banner_rect.y + 70), center=True)
+            else:
+                draw_gradient_rect(surface, banner_rect, (22, 101, 52), (21, 128, 61), border_radius=16)
+                draw_alpha_outline(surface, banner_rect, (74, 222, 128), width=2, border_radius=16)
+                self.draw_trophy_icon(surface, (370, 330))
+                draw_shadowed_text(surface, FONT_END_BANNER, f"🏆 {winner['name']} Wins!", WHITE, (banner_rect.centerx, banner_rect.y + 32), center=True)
+                draw_shadowed_text(
+                    surface,
+                    FONT_END_BANNER_SUB,
+                    f"{winner['name']} {winner['reason']} this round",
+                    (187, 247, 208),
+                    (banner_rect.centerx, banner_rect.y + 70),
+                    center=True,
+                )
+        else:
+            pygame.draw.rect(surface, (30, 41, 59), banner_rect, border_radius=16)
+            draw_alpha_outline(surface, banner_rect, (148, 163, 184), width=2, border_radius=16)
+            draw_shadowed_text(surface, FONT_END_BANNER, "🤝 It's a Draw!", (226, 232, 240), (banner_rect.centerx, banner_rect.y + 32), center=True)
+            draw_shadowed_text(
+                surface,
+                FONT_END_BANNER_SUB,
+                "Both players performed equally",
+                (148, 163, 184),
+                (banner_rect.centerx, banner_rect.y + 70),
+                center=True,
+            )
 
-        stats = [
-            ("Final Carbon Level", str(self.carbon_level), self.carbon_level_color()),
-            ("City Health", str(self.city_health), GREEN if self.city_health >= 50 else RED),
-            ("Rounds Completed", str(self.completed_rounds), WHITE),
+        player_cards = [
+            (pygame.Rect(180, 400, 420, 180), self.players[0], self.player1_carbon_contribution, 0),
+            (pygame.Rect(660, 400, 420, 180), self.players[1], self.player2_carbon_contribution, 1),
         ]
-        for idx, (label, value, color) in enumerate(stats):
-            stat_rect = pygame.Rect(154 + idx * 324, 270, 260, 98)
-            pygame.draw.rect(surface, PANEL_DARK, stat_rect, border_radius=22)
-            draw_alpha_outline(surface, stat_rect, color, width=2, border_radius=22)
-            draw_shadowed_text(surface, FONT_SMALL_BOLD, label, LIGHT_GRAY, (stat_rect.centerx, stat_rect.y + 22), center=True)
-            draw_shadowed_text(surface, FONT_HEADING, value, color, (stat_rect.centerx, stat_rect.y + 54), center=True)
+        for rect, player, contribution, index in player_cards:
+            self.draw_end_player_card(surface, rect, player, contribution, winner["index"], index)
+            rating_text, rating_color = self.player_eco_rating(player)
+            draw_shadowed_text(surface, FONT_END_CARD_BODY, rating_text, rating_color, (rect.centerx, 600), center=True)
 
-        for idx, player in enumerate(self.players):
-            player_rect = pygame.Rect(154 + idx * 486, 404, 470, 118)
-            border = GREEN if idx == 0 else YELLOW
-            pygame.draw.rect(surface, PANEL_DARK, player_rect, border_radius=24)
-            draw_alpha_outline(surface, player_rect, border, width=2, border_radius=24)
-            draw_shadowed_text(surface, FONT_BODY_BOLD, player["name"], WHITE, (player_rect.x + 20, player_rect.y + 16))
-            draw_shadowed_text(surface, FONT_BODY, f"Decisions: {player['decisions']}", LIGHT_GRAY, (player_rect.x + 20, player_rect.y + 52))
-            draw_shadowed_text(surface, FONT_BODY, f"Eco: {player['eco']}", GREEN, (player_rect.x + 206, player_rect.y + 52))
-            draw_shadowed_text(surface, FONT_BODY, f"Quick: {player['quick']}", RED, (player_rect.x + 312, player_rect.y + 52))
-            draw_shadowed_text(surface, FONT_BODY, f"Budget: {player['budget']}c", WHITE, (player_rect.x + 20, player_rect.y + 84))
-
-        self.replay_button.set_rect((540, 570, 180, 52))
-        self.quit_button.set_rect((760, 570, 180, 52))
-        self.replay_button.draw(surface, FONT_BODY_BOLD)
-        self.quit_button.draw(surface, FONT_BODY_BOLD)
+        self.replay_button.set_rect((460, 660, 160, 48))
+        self.quit_button.set_rect((660, 660, 160, 48))
+        self.draw_end_button(surface, self.replay_button, (22, 163, 74), (34, 197, 94))
+        self.draw_end_button(surface, self.quit_button, (185, 28, 28), (220, 38, 38))
         self.particles.draw(surface)
         surface.set_clip(clip_before)
 
@@ -1326,10 +1744,17 @@ class Game:
         self.base_surface.blit(debug_surface, debug_rect)
 
     def present_frame(self):
+        source_surface = self.base_surface
+        if self.state == "bankruptcy" and self.shake_time > 0:
+            shake_surface = pygame.Surface((BASE_W, BASE_H))
+            shake_surface.fill(BG_COLOR)
+            shake_px = max(1, int(self.shake_strength * (self.shake_time / max(self.shake_duration, 0.001))))
+            shake_surface.blit(self.base_surface, (random.randint(-shake_px, shake_px), random.randint(-shake_px, shake_px)))
+            source_surface = shake_surface
         if RENDER_W == BASE_W and RENDER_H == BASE_H:
-            self.screen.blit(self.base_surface, (0, 0))
+            self.screen.blit(source_surface, (0, 0))
         else:
-            scaled = pygame.transform.smoothscale(self.base_surface, (RENDER_W, RENDER_H))
+            scaled = pygame.transform.smoothscale(source_surface, (RENDER_W, RENDER_H))
             self.screen.blit(scaled, (0, 0))
         pygame.display.flip()
 
@@ -1339,6 +1764,9 @@ class Game:
             self.draw_title()
         elif self.state == "game":
             self.draw_game()
+        elif self.state == "bankruptcy":
+            self.draw_game()
+            self.draw_bankruptcy_overlay()
         else:
             self.draw_end()
         self.draw_resolution_debug()
@@ -1360,4 +1788,3 @@ if __name__ == "__main__":
     Game().run()
 
 # To build: pyinstaller --onefile --noconsole main.py
-
