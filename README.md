@@ -1,0 +1,1 @@
+Players take turns making city decisions (build a coal plant vs. solar farm, add parking lots vs. bike lanes). Each choice shifts a shared Carbon Meter up or down. The city either thrives or collapses based on collective choices. Think Monopoly meets SimCity.
