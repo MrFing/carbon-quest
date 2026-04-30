@@ -78,7 +78,7 @@ export default function EndScreen({ state, onPlayAgain, onQuit }: EndScreenProps
               <div key={player.name} style={{ width: 420 }}>
                 <div
                   style={{
-                    height: 180,
+                    minHeight: 214,
                     borderRadius: 12,
                     border: `2px solid ${borderColor}`,
                     background: cardBackground,
@@ -105,7 +105,7 @@ export default function EndScreen({ state, onPlayAgain, onQuit }: EndScreenProps
                       💸 BANKRUPT
                     </div>
                   ) : null}
-                  <div style={{ marginTop: 18, display: "grid", gap: 10, color: "#cbd5e1", fontSize: 16 }}>
+                  <div style={{ marginTop: 18, display: "grid", gap: 8, color: "#cbd5e1", fontSize: 15 }}>
                     <div>Total decisions: {player.decisions}</div>
                     <div style={{ color: "#4ade80" }}>Eco choices: {player.ecoChoices}</div>
                     <div style={{ color: "#f87171" }}>Quick choices: {player.quickChoices}</div>
@@ -119,7 +119,7 @@ export default function EndScreen({ state, onPlayAgain, onQuit }: EndScreenProps
                     </div>
                   </div>
                 </div>
-                <div style={{ marginTop: 18, textAlign: "center", fontSize: 18, fontWeight: 700, color: rating.color }}>{rating.label}</div>
+                <div style={{ marginTop: 24, textAlign: "center", fontSize: 18, fontWeight: 700, color: rating.color }}>{rating.label}</div>
               </div>
             );
           })}

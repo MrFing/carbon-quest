@@ -27,6 +27,12 @@ export default function CarbonMeter({ value }: CarbonMeterProps) {
   }, [displayValue, value]);
 
   const fillHeight = Math.max(0, Math.min(216, (displayValue / 100) * 216));
+  const meterPanelWidth = 370;
+  const meterTop = 53;
+  const meterLeft = 100;
+  const meterHeight = 220;
+  const meterInnerHeight = 216;
+  const meterBottom = meterTop + meterInnerHeight;
 
   return (
     <div
@@ -38,17 +44,28 @@ export default function CarbonMeter({ value }: CarbonMeterProps) {
         height: 320,
         background: "#101826",
         borderRadius: 18,
-        border: "1px solid rgba(255,255,255,0.08)"
+        border: "1px solid rgba(255,255,255,0.08)",
+        overflow: "hidden"
       }}
     >
-      <div style={{ position: "absolute", left: 1095, top: 108, transform: "translateX(-50%)", color: "#aaaacc", fontSize: 15, fontWeight: 800 }}>
+      <div
+        style={{
+          position: "absolute",
+          left: meterPanelWidth / 2,
+          top: 12,
+          transform: "translateX(-50%)",
+          color: "#aaaacc",
+          fontSize: 15,
+          fontWeight: 800
+        }}
+      >
         CARBON LEVEL
       </div>
       <div
         style={{
           position: "absolute",
-          left: 1035,
-          top: 120,
+          left: (meterPanelWidth - 120) / 2,
+          top: 34,
           width: 120,
           height: 24,
           borderRadius: 12,
@@ -65,10 +82,10 @@ export default function CarbonMeter({ value }: CarbonMeterProps) {
       <div
         style={{
           position: "absolute",
-          left: 1010,
-          top: 148,
+          left: meterLeft,
+          top: meterTop,
           width: 60,
-          height: 220,
+          height: meterHeight,
           background: "#0d1b2a",
           borderRadius: 10,
           border: "2px solid #334466",
@@ -90,11 +107,11 @@ export default function CarbonMeter({ value }: CarbonMeterProps) {
       </div>
 
       {[0, 25, 50, 75, 100].map((tick) => {
-        const y = 366 - (tick / 100) * 216;
+        const y = meterBottom - (tick / 100) * meterInnerHeight;
         return (
           <div key={tick}>
-            <div style={{ position: "absolute", left: 1072, top: y, width: 6, height: 1, background: "#445566" }} />
-            <div style={{ position: "absolute", left: 1082, top: y - 8, color: "#8899aa", fontSize: 11 }}>{tick}</div>
+            <div style={{ position: "absolute", left: meterLeft + 62, top: y, width: 6, height: 1, background: "#445566" }} />
+            <div style={{ position: "absolute", left: meterLeft + 72, top: y - 8, color: "#8899aa", fontSize: 11 }}>{tick}</div>
           </div>
         );
       })}
