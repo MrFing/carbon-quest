@@ -5,6 +5,54 @@ import JoinParty from "./JoinParty";
 import { getBackendHttpBase } from "../hooks/useWebSocket";
 import type { PartyResponse } from "../game/types";
 
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as { detail?: string; message?: string };
+    if (typeof payload.detail === "string" && payload.detail.trim()) {
+      return payload.detail;
+    }
+    if (typeof payload.message === "string" && payload.message.trim()) {
+      return payload.message;
+    }
+  } catch {
+    // Ignore JSON parsing issues and fall back to the HTTP status text.
+  }
+
+  return response.statusText || "Request failed.";
+}
+
+async function requestJsonWithRetry<T>(url: string, init?: RequestInit): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(url, init);
+      if (response.ok) {
+        return (await response.json()) as T;
+      }
+
+      const message = await readErrorMessage(response);
+      const retryable = response.status >= 500 || response.status === 429;
+      if (!retryable) {
+        throw new Error(message);
+      }
+      lastError = new Error(message || "The server is temporarily unavailable.");
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Network request failed.");
+    }
+
+    if (attempt < 2) {
+      await sleep(700 * (attempt + 1));
+    }
+  }
+
+  throw lastError ?? new Error("Request failed.");
+}
+
 export default function OnlineGame() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,13 +63,9 @@ export default function OnlineGame() {
     setError(null);
     setLoading(true);
     try {
-      const response = await fetch(`${getBackendHttpBase()}/api/create-party`, {
+      const payload = await requestJsonWithRetry<PartyResponse>(`${getBackendHttpBase()}/api/create-party`, {
         method: "POST"
       });
-      if (!response.ok) {
-        throw new Error("Unable to create a party right now.");
-      }
-      const payload = (await response.json()) as PartyResponse;
       sessionStorage.setItem(`carbon-quest-party:${payload.code}`, payload.sessionId);
       sessionStorage.setItem(`carbon-quest-player:${payload.sessionId}`, "1");
       navigate(`/party/${payload.code}`, { state: { sessionId: payload.sessionId, player: 1 } });
@@ -34,19 +78,16 @@ export default function OnlineGame() {
 
   const joinParty = async () => {
     setError(null);
-    if (code.trim().length !== 6) {
+    const normalizedCode = code.trim().toUpperCase();
+    if (normalizedCode.length !== 6) {
       setError("Party codes must be 6 characters.");
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(`${getBackendHttpBase()}/api/party/${code.trim()}`);
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || "Could not join that party.");
-      }
-      const payload = (await response.json()) as PartyResponse;
+      const payload = await requestJsonWithRetry<PartyResponse>(`${getBackendHttpBase()}/api/party/${normalizedCode}`);
+      sessionStorage.setItem(`carbon-quest-party:${payload.code}`, payload.sessionId);
       sessionStorage.setItem(`carbon-quest-player:${payload.sessionId}`, "2");
       navigate(`/game/${payload.sessionId}`, { state: { player: 2, partyCode: payload.code } });
     } catch (requestError) {
@@ -71,7 +112,7 @@ export default function OnlineGame() {
       >
         <JoinParty code={code} loading={loading} error={error} onCodeChange={setCode} onJoin={joinParty} />
 
-        <div style={{ color: "#64748B", fontWeight: 700 }}>— or —</div>
+        <div style={{ color: "#64748B", fontWeight: 700 }}>- or -</div>
 
         <div style={{ display: "grid", gap: 16, justifyItems: "center" }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#f8fafc" }}>Create Party</div>

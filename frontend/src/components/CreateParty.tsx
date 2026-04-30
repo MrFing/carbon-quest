@@ -37,9 +37,14 @@ export default function CreateParty() {
     return `${getBackendWsBase()}/ws/${sessionId}?player=1`;
   }, [sessionId]);
 
-  const { sendMessage } = useWebSocket(wsUrl, {
+  const { status, sendMessage } = useWebSocket(wsUrl, {
+    reconnect: true,
     onMessage: (message: ServerMessage) => {
       if (message.type === "ERROR") {
+        if (/session not found/i.test(message.message)) {
+          navigate("/online", { replace: true });
+          return;
+        }
         setError(message.message);
       }
       if (message.type === "PLAYER_JOINED") {
@@ -48,7 +53,8 @@ export default function CreateParty() {
       }
       if (message.type === "GAME_START") {
         pendingState.current = message.state;
-        setCountdown(3);
+        setCountdown((current) => current ?? 3);
+        setError(null);
       }
       if (message.type === "PARTY_REVOKED") {
         navigate("/online", { replace: true });
@@ -107,7 +113,7 @@ export default function CreateParty() {
             fontSize: 16
           }}
         >
-          ← Back
+          &larr; Back
         </button>
 
         <div style={{ textAlign: "center", marginTop: 8 }}>
@@ -141,11 +147,11 @@ export default function CreateParty() {
               }}
               title={copied ? "Copied!" : "Copy code"}
             >
-              {copied ? "✓" : "📋"}
+              {copied ? "OK" : "Copy"}
             </button>
           </div>
           <div style={{ marginTop: 10, fontSize: 13, color: "#64748B", lineHeight: 1.7 }}>
-            Share this code with your friend. They&apos;ll enter it on the Start Online Session screen to join your game.
+            Share this code with your friend. They'll enter it on the Start Online Session screen to join your game.
             <br />
             This code expires when the game ends or you leave.
           </div>
@@ -165,24 +171,25 @@ export default function CreateParty() {
               boxShadow: "0 0 0 14px rgba(0, 200, 83, 0.06)"
             }}
           >
-            <div style={{ fontSize: 34 }}>👥</div>
+            <div style={{ fontSize: 28 }}>P2</div>
           </div>
 
           {!waitingFlash ? (
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 32, fontWeight: 800, color: "#f8fafc" }}>
-                Waiting for Player 2{countdown === null ? "..." : ""}
+                {countdown === null ? "Waiting for Player 2..." : "Starting game..."}
               </div>
               {countdown !== null && (
                 <div style={{ marginTop: 18, fontSize: 52, fontWeight: 900, color: "#00C853" }}>
-                  {countdown > 0 ? countdown : "GO!"}
+                  {countdown > 0 ? countdown : "GO"}
                 </div>
               )}
+              {status !== "open" && countdown === null ? (
+                <div style={{ marginTop: 12, color: "#94A3B8", fontSize: 14 }}>Connecting to session...</div>
+              ) : null}
             </div>
           ) : (
-            <div style={{ fontSize: 28, fontWeight: 800, color: "#4ade80" }}>
-              Player 2 Connected! 🎉
-            </div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: "#4ade80" }}>Player 2 Connected!</div>
           )}
         </div>
 

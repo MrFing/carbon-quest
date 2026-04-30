@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import random
 import string
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 from uuid import uuid4
@@ -9,6 +10,8 @@ from uuid import uuid4
 from fastapi import WebSocket
 
 from game_logic import CarbonQuestGame
+
+PARTY_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 @dataclass
@@ -20,6 +23,12 @@ class Session:
     player1_ws: Optional[WebSocket] = None
     player2_ws: Optional[WebSocket] = None
     play_again_votes: set[int] = field(default_factory=set)
+    created_at: float = field(default_factory=time.time)
+    updated_at: float = field(default_factory=time.time)
+    disconnect_tokens: dict[int, int] = field(default_factory=lambda: {1: 0, 2: 0})
+
+    def touch(self) -> None:
+        self.updated_at = time.time()
 
     def get_socket(self, player: int) -> Optional[WebSocket]:
         return self.player1_ws if player == 1 else self.player2_ws
@@ -29,6 +38,7 @@ class Session:
             self.player1_ws = websocket
         else:
             self.player2_ws = websocket
+        self.touch()
 
     def other_socket(self, player: int) -> Optional[WebSocket]:
         return self.player2_ws if player == 1 else self.player1_ws
@@ -38,6 +48,18 @@ class Session:
 
     def both_connected(self) -> bool:
         return self.player1_ws is not None and self.player2_ws is not None
+
+    def mark_connected(self, player: int, websocket: WebSocket) -> None:
+        self.disconnect_tokens[player] += 1
+        self.set_socket(player, websocket)
+
+    def mark_disconnected(self, player: int) -> int:
+        self.disconnect_tokens[player] += 1
+        self.set_socket(player, None)
+        return self.disconnect_tokens[player]
+
+    def disconnect_token(self, player: int) -> int:
+        return self.disconnect_tokens[player]
 
 
 class SessionManager:
@@ -67,9 +89,8 @@ class SessionManager:
             self.sessions_by_code.pop(session.party_code, None)
 
     def _generate_party_code(self) -> str:
-        alphabet = string.ascii_uppercase + string.digits
         while True:
-            code = "".join(random.choice(alphabet) for _ in range(6))
+            code = "".join(random.choice(PARTY_CODE_ALPHABET) for _ in range(6))
             if code not in self.sessions_by_code:
                 return code
 

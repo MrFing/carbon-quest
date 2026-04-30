@@ -81,7 +81,7 @@ export type ServerMessage =
   | { type: "GAME_START"; state: GameState }
   | { type: "STATE_UPDATE"; state: GameState }
   | { type: "GAME_OVER"; state: GameState; winner: Winner }
-  | { type: "PLAYER_DISCONNECTED" }
+  | { type: "PLAYER_DISCONNECTED"; player?: 1 | 2 }
   | { type: "PARTY_REVOKED" }
   | { type: "ERROR"; message: string };
 

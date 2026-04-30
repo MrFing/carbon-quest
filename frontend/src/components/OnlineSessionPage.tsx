@@ -17,7 +17,8 @@ export default function OnlineSessionPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const routeState = (location.state as RouteState | null) ?? null;
-  const player = (routeState?.player ?? Number(sessionStorage.getItem(`carbon-quest-player:${sessionId}`)) ?? 0) as 1 | 2;
+  const storedPlayer = Number(sessionStorage.getItem(`carbon-quest-player:${sessionId}`));
+  const player = (routeState?.player ?? storedPlayer ?? 0) as 1 | 2;
   const [state, setState] = useState<GameState>(routeState?.initialState ?? createInitialState());
   const [hasRemoteState, setHasRemoteState] = useState(Boolean(routeState?.initialState));
   const [showBankruptcyOverlay, setShowBankruptcyOverlay] = useState(false);
@@ -43,11 +44,13 @@ export default function OnlineSessionPage() {
     window.setTimeout(() => navigate("/", { replace: true }), 1100);
   };
 
-  const { sendMessage } = useWebSocket(wsUrl, {
+  const { status, sendMessage } = useWebSocket(wsUrl, {
+    reconnect: true,
     onMessage: (message: ServerMessage) => {
       if (message.type === "GAME_START" || message.type === "STATE_UPDATE" || message.type === "GAME_OVER") {
         setState(message.state);
         setHasRemoteState(true);
+        setToast(null);
         if (message.state.gameOverReason === "bankruptcy") {
           setShowBankruptcyOverlay(true);
         } else {
@@ -55,20 +58,40 @@ export default function OnlineSessionPage() {
         }
       }
       if (message.type === "PLAYER_DISCONNECTED") {
-        redirectHome("Player disconnected");
+        const disconnectedPlayer = message.player ?? (player === 1 ? 2 : 1);
+        setToast(`Player ${disconnectedPlayer} disconnected. Waiting for them to reconnect...`);
       }
       if (message.type === "PARTY_REVOKED") {
         redirectHome("Session ended");
       }
       if (message.type === "ERROR") {
-        setToast(message.message);
+        if (/session not found/i.test(message.message)) {
+          redirectHome("Session expired");
+        } else {
+          setToast(message.message);
+        }
       }
     }
   });
 
+  useEffect(() => {
+    if (status === "connecting" && hasRemoteState) {
+      setToast((current) => current ?? "Reconnecting to session...");
+    }
+    if (status === "open" && toast === "Reconnecting to session...") {
+      setToast(null);
+    }
+  }, [hasRemoteState, status, toast]);
+
   const canPlay = hasRemoteState && !state.gameOver && state.currentPlayer === player;
   const currentBudget = player === 1 ? state.player1.budget : state.player2.budget;
-  const disabledMessage = !canPlay && !state.gameOver ? `Waiting for Player ${state.currentPlayer}...` : null;
+
+  let disabledMessage: string | null = null;
+  if (!hasRemoteState) {
+    disabledMessage = player === 1 ? "Waiting for the session to start..." : "Waiting for Player 1 to start the game...";
+  } else if (!canPlay && !state.gameOver) {
+    disabledMessage = `Waiting for Player ${state.currentPlayer}...`;
+  }
 
   return (
     <div style={{ position: "relative" }}>

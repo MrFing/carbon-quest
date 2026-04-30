@@ -81,3 +81,14 @@ Note: Earlier edits were reconstructed from the build session history and record
 - Fixed a workspace mismatch during generation by copying the completed backend and frontend source trees into the intended `C:\Users\orewa\Downloads\Carbon Quest\Carbon Quest` project folder.
 - Verified that the migrated backend Python files compile successfully with `py_compile`.
 - Verified that the migrated backend/frontend web stack files contain no `pygame` references.
+
+[2026-04-30 13:20:00 +05:30] HISTORY ENTRY 14 - Online session reliability repair and API hardening
+- Fixed the core online-session failure where temporary WebSocket disconnects, route transitions, or host page changes were destroying the whole session immediately.
+- Reworked backend disconnect handling to use a reconnect grace period instead of revoking the party on the first dropped socket.
+- Stopped the guest side from being force-started before both players are actually connected.
+- Added frontend WebSocket auto-reconnect support so short network drops and route handoffs recover automatically.
+- Changed the online game screen to wait for reconnection instead of redirecting both players back to the title screen on temporary disconnects.
+- Hardened party creation and join requests with retry logic for transient backend failures and Render cold-start style hiccups.
+- Added root and `/health` backend endpoints so infrastructure probes no longer hit only 404 responses.
+- Switched party-code generation to a less ambiguous character set to reduce `O` versus `0` and similar join mistakes.
+- Verified backend syntax with `py_compile` and verified the frontend with a successful production `npm run build`.
