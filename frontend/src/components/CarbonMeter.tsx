@@ -28,7 +28,7 @@ export default function CarbonMeter({ value }: CarbonMeterProps) {
 
   const fillHeight = Math.max(0, Math.min(216, (displayValue / 100) * 216));
   const meterPanelWidth = 370;
-  const meterTop = 53;
+  const meterTop = 64;
   const meterLeft = 100;
   const meterHeight = 220;
   const meterInnerHeight = 216;
