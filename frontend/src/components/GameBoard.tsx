@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
-import type { ChoiceType, DecisionCard, GameState, PlayerState, Zone } from "../game/types";
+import type { ChoiceType, DecisionCard, EventCard, GameState, PlayerState, Zone } from "../game/types";
 import { RULES_TEXT, ZONE_COLORS } from "../game/cards";
 import { calculateScores } from "../game/gameLogic";
 import { formatBudget } from "../utils/formatBudget";
@@ -18,10 +18,6 @@ interface GameBoardProps {
 const WIDTH = 1280;
 const HEIGHT = 720;
 const FONT_FAMILY = '"Segoe UI", Arial, sans-serif';
-const BG = "#151923";
-const PANEL = "#1f2937";
-const PANEL_2 = "#111827";
-const INK = "#080d18";
 const WHITE = "#eef2ff";
 const MUTED = "#94a3b8";
 const GREEN = "#22c55e";
@@ -30,12 +26,9 @@ const YELLOW = "#facc15";
 const BLUE = "#60a5fa";
 const PURPLE = "#a78bfa";
 const ORANGE = "#fb923c";
+const PANEL_FILL = "#111827";
 
 const BOARD_POSITIONS = buildBoardPositions();
-
-function clamp(value: number, low: number, high: number) {
-  return Math.max(low, Math.min(high, value));
-}
 
 export default function GameBoard({ state, canPlay, disabledMessage, onRoll, onChoice, onPlayAgain, onQuit }: GameBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -111,7 +104,7 @@ export default function GameBoard({ state, canPlay, disabledMessage, onRoll, onC
   }, [showRules]);
 
   const showDecisionButtons = !state.gameOver && !!(state.selectedCard || state.selectedEvent);
-  const showRollButton = !state.gameOver && !state.selectedCard && !state.selectedEvent;
+  const activePlayer = state.currentPlayer === 1 ? state.player1 : state.player2;
 
   return (
     <div className="page-center" style={{ alignItems: "flex-start", paddingTop: 16, paddingBottom: 16 }}>
@@ -134,33 +127,26 @@ export default function GameBoard({ state, canPlay, disabledMessage, onRoll, onC
         >
           <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} style={{ position: "absolute", inset: 0, width: WIDTH, height: HEIGHT }} />
 
-          {!state.gameOver && !showRules ? (
-            <button style={buttonStyle(1090, 28, 140, 38, ORANGE)} onClick={() => setShowRules(true)}>
-              Rules
-            </button>
+          {!showRules && !state.gameOver ? (
+            <>
+              <button style={buttonStyle(1090, 28, 140, 38, ORANGE)} onClick={() => setShowRules(true)}>
+                Rules
+              </button>
+              {renderCityVisualOverlay(state)}
+              {renderDashboardPanel(state)}
+              {renderPlayerPanel(state.player1, 742, 338, GREEN, state.currentPlayer === 1)}
+              {renderPlayerPanel(state.player2, 1002, 338, PURPLE, state.currentPlayer === 2)}
+              {renderDecisionPanel(state, activePlayer)}
+              {renderActionBar(state, canPlay, disabledMessage, showDecisionButtons, onRoll, onChoice)}
+              {renderPlayerToken(state.player1, GREEN, "1", -14)}
+              {renderPlayerToken(state.player2, PURPLE, "2", 14)}
+            </>
           ) : null}
 
           {showRules ? (
             <button style={buttonStyle(40, 650, 140, 42, BLUE)} onClick={() => setShowRules(false)}>
               Back
             </button>
-          ) : null}
-
-          {!showRules && !state.gameOver && showRollButton ? (
-            <button style={buttonStyle(1065, 660, 140, 38, BLUE, !canPlay)} onClick={onRoll} disabled={!canPlay}>
-              Roll Dice
-            </button>
-          ) : null}
-
-          {!showRules && !state.gameOver && showDecisionButtons ? (
-            <>
-              <button style={buttonStyle(930, 660, 140, 38, GREEN, !canPlay)} onClick={() => onChoice("eco")} disabled={!canPlay}>
-                Eco Plan
-              </button>
-              <button style={buttonStyle(1085, 660, 140, 38, RED, !canPlay)} onClick={() => onChoice("quick")} disabled={!canPlay}>
-                Quick Fix
-              </button>
-            </>
           ) : null}
 
           {state.gameOver && !showRules ? (
@@ -173,31 +159,325 @@ export default function GameBoard({ state, canPlay, disabledMessage, onRoll, onC
               </button>
             </>
           ) : null}
-
-          {!showRules && !state.gameOver && disabledMessage ? (
-            <div
-              style={{
-                position: "absolute",
-                left: 742,
-                top: 646,
-                width: 510,
-                height: 62,
-                borderRadius: 16,
-                background: "rgba(2, 6, 23, 0.7)",
-                display: "grid",
-                placeItems: "center",
-                textAlign: "center",
-                padding: 16,
-                color: WHITE,
-                fontWeight: 700,
-                pointerEvents: "none"
-              }}
-            >
-              {disabledMessage}
-            </div>
-          ) : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+function renderCityVisualOverlay(state: GameState) {
+  const pollution = clamp(state.carbon / 100, 0, 1);
+  const skyTop = lerpColor("#3e84be", "#82464b", pollution);
+  const skyBottom = lerpColor("#fcb268", "#924c45", pollution);
+  const buildings = [
+    { left: 35, height: 90 },
+    { left: 90, height: 120 },
+    { left: 165, height: 75 },
+    { left: 225, height: 130 },
+    { left: 310, height: 95 },
+    { left: 375, height: 118 }
+  ];
+  const treeCount = Math.max(1, Math.floor(state.resilience / 12));
+
+  return (
+    <div style={overlayPanelStyle(143, 218, 479, 214, 16, "#0c1220", "#374b60")}>
+      <div
+        style={{
+          position: "absolute",
+          left: 12,
+          top: 12,
+          width: 455,
+          height: 190,
+          overflow: "hidden",
+          borderRadius: 10,
+          border: "2px solid #eef2ff",
+          background: `linear-gradient(180deg, ${skyTop} 0%, ${skyBottom} 100%)`
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            right: 32,
+            top: 18,
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: "#ffd682"
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 95,
+            background: "#24303b",
+            clipPath: "polygon(0 100%, 0 76%, 28% 58%, 55% 72%, 100% 50%, 100% 100%)"
+          }}
+        />
+        {buildings.map((building, index) => (
+          <div
+            key={`${building.left}-${index}`}
+            style={{
+              position: "absolute",
+              left: building.left,
+              bottom: 0,
+              width: 42,
+              height: building.height,
+              borderRadius: 5,
+              background: lerpColor("#2d3748", "#524142", pollution),
+              border: "2px solid #0a0f18"
+            }}
+          >
+            {Array.from({ length: Math.max(1, Math.floor((building.height - 20) / 20)) }).map((_, windowIndex) => (
+              <div
+                key={windowIndex}
+                style={{
+                  position: "absolute",
+                  left: 12,
+                  top: 12 + windowIndex * 20,
+                  width: 8,
+                  height: 10,
+                  borderRadius: 2,
+                  background: "#ffe68c"
+                }}
+              />
+            ))}
+          </div>
+        ))}
+        {Array.from({ length: treeCount }).map((_, index) => {
+          const left = 25 + index * 45;
+          return (
+            <div key={left} style={{ position: "absolute", left, bottom: 0, width: 30, height: 42 }}>
+              <div style={{ position: "absolute", left: 11, bottom: 0, width: 8, height: 22, background: "#5e3c23" }} />
+              <div style={{ position: "absolute", left: 0, bottom: 15, width: 30, height: 30, borderRadius: "50%", background: GREEN }} />
+            </div>
+          );
+        })}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `rgba(230,80,60,${0.3 * pollution})`
+          }}
+        />
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: -2,
+          textAlign: "center",
+          color: WHITE,
+          font: `12px ${FONT_FAMILY}`
+        }}
+      >
+        Live city view changes with carbon and resilience
+      </div>
+    </div>
+  );
+}
+
+function renderDashboardPanel(state: GameState) {
+  const rows = [
+    { label: "Carbon", value: state.carbon, color: RED },
+    { label: "Health", value: state.health, color: GREEN },
+    { label: "Resilience", value: state.resilience, color: BLUE }
+  ];
+
+  return (
+    <div style={overlayPanelStyle(742, 86, 510, 245, 18, "#0e1726", "#374b60")}>
+      <div style={{ position: "absolute", left: 23, top: 24, color: WHITE, font: `700 22px ${FONT_FAMILY}` }}>City Dashboard</div>
+      {rows.map((row, index) => {
+        const top = 88 + index * 58;
+        return (
+          <div key={row.label} style={{ position: "absolute", left: 23, right: 23, top }}>
+            <div style={{ color: row.color, font: `700 22px ${FONT_FAMILY}` }}>{row.label}: {row.value}</div>
+            <div style={{ position: "absolute", left: 220, top: 5, width: 245, height: 18, borderRadius: 10, background: "#0f172a" }}>
+              <div
+                style={{
+                  width: `${clamp(row.value, 0, 100)}%`,
+                  height: 14,
+                  marginTop: 2,
+                  marginLeft: 2,
+                  borderRadius: 8,
+                  background: row.color
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function renderPlayerPanel(player: PlayerState, left: number, top: number, accent: string, isActive: boolean) {
+  const policies = player.policies.length > 0 ? player.policies.join(", ") : "None";
+  return (
+    <div
+      style={{
+        ...overlayPanelStyle(left, top, 245, 142, 12, PANEL_FILL, isActive ? accent : "#475569"),
+        boxShadow: isActive ? `0 0 0 8px ${withAlpha(accent, 0.12)}, 5px 7px 0 #030712` : "5px 7px 0 #030712"
+      }}
+    >
+      <div style={{ position: "absolute", left: 16, top: 12, color: accent, font: `700 22px ${FONT_FAMILY}` }}>{player.name}</div>
+      <div style={pillAbsoluteStyle(161, 14, 62, 22, isActive ? accent : "#334155")}>{isActive ? "TURN" : "WAIT"}</div>
+      <div style={{ position: "absolute", left: 16, top: 48, color: WHITE, font: `15px ${FONT_FAMILY}` }}>Budget: {formatBudget(player.budget)}</div>
+      <div style={{ position: "absolute", left: 16, top: 72, color: WHITE, font: `15px ${FONT_FAMILY}` }}>Support: {player.support}</div>
+      <div style={{ position: "absolute", left: 16, top: 96, color: GREEN, font: `15px ${FONT_FAMILY}` }}>Green points: {player.greenPoints}</div>
+      <div style={{ position: "absolute", left: 16, top: 121, color: MUTED, font: `12px ${FONT_FAMILY}` }}>Policies: {policies.slice(0, 28)}</div>
+    </div>
+  );
+}
+
+function renderDecisionPanel(state: GameState, activePlayer: PlayerState) {
+  const left = 742;
+  const top = 490;
+  const width = 510;
+  const height = 150;
+
+  if (state.selectedEvent) {
+    return (
+      <div style={overlayPanelStyle(left, top, width, height, 12, PANEL_FILL, "#475569")}>
+        <div style={{ position: "absolute", left: 0, top: 0, width: 8, height, borderRadius: "12px 0 0 12px", background: PURPLE }} />
+        <div style={{ position: "absolute", left: 16, top: 12, color: PURPLE, font: `700 30px ${FONT_FAMILY}` }}>EVENT: {state.selectedEvent.title}</div>
+        {wrapTextLines(state.selectedEvent.text, 64).slice(0, 3).map((line, index) => (
+          <div key={index} style={{ position: "absolute", left: 16, top: 50 + index * 20, color: WHITE, font: `15px ${FONT_FAMILY}` }}>{line}</div>
+        ))}
+        <div style={{ position: "absolute", left: 16, top: 122, color: YELLOW, font: `12px ${FONT_FAMILY}` }}>Pick an action</div>
+      </div>
+    );
+  }
+
+  if (!state.selectedCard) {
+    const accent = state.currentPlayer === 1 ? GREEN : PURPLE;
+    return (
+      <div style={overlayPanelStyle(left, top, width, height, 12, PANEL_FILL, "#475569")}>
+        <div style={{ position: "absolute", left: 16, top: 12, color: accent, font: `700 30px ${FONT_FAMILY}` }}>{activePlayer.name}'s Turn</div>
+        <div style={pillAbsoluteStyle(372, 14, 108, 24, BLUE)}>Round {Math.min(state.round, state.maxRounds)}/{state.maxRounds}</div>
+        <div style={{ position: "absolute", left: 16, top: 54, color: WHITE, font: `18px ${FONT_FAMILY}` }}>Dice: {state.dice}</div>
+      </div>
+    );
+  }
+
+  const card = state.selectedCard;
+  const zoneColor = ZONE_COLORS[card.zone] ?? BLUE;
+  return (
+    <div style={overlayPanelStyle(left, top, width, height, 12, PANEL_FILL, "#475569")}>
+      <div style={{ position: "absolute", left: 0, top: 0, width: 8, height, borderRadius: "12px 0 0 12px", background: zoneColor }} />
+      <div style={{ position: "absolute", left: 16, top: 8, color: zoneColor, font: `700 30px ${FONT_FAMILY}` }}>{card.title}</div>
+      <div style={{ position: "absolute", right: 16, top: 20, width: 24, height: 24, borderRadius: 12, border: `3px solid ${zoneColor}` }} />
+      {renderChoiceBox(card, "eco", 16, 60, "#10502d", "#86efac")}
+      {renderChoiceBox(card, "quick", 256, 60, "#641919", "#fecaca")}
+    </div>
+  );
+}
+
+function renderChoiceBox(card: DecisionCard, choice: ChoiceType, left: number, top: number, background: string, labelColor: string) {
+  const title = choice === "eco" ? "ECO" : "QUICK";
+  const body = choice === "eco" ? card.eco : card.quick;
+  const effect = choice === "eco" ? card.ecoEffect : card.quickEffect;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left,
+        top,
+        width: 225,
+        height: 75,
+        borderRadius: 9,
+        background
+      }}
+    >
+      <div style={{ position: "absolute", left: 12, top: 7, color: labelColor, font: `700 15px ${FONT_FAMILY}` }}>{title}</div>
+      <div style={{ position: "absolute", left: 12, top: 27, color: WHITE, font: `12px ${FONT_FAMILY}` }}>{body}</div>
+      <div style={{ position: "absolute", left: 12, top: 42, color: WHITE, font: `12px ${FONT_FAMILY}` }}>Carbon {effect[0] >= 0 ? "+" : ""}{effect[0]}   Health {effect[1] >= 0 ? "+" : ""}{effect[1]}</div>
+      <div style={{ position: "absolute", left: 12, top: 55, color: WHITE, font: `12px ${FONT_FAMILY}` }}>Cost: {formatBudget(Math.abs(effect[2]))}</div>
+    </div>
+  );
+}
+
+function renderActionBar(
+  state: GameState,
+  canPlay: boolean,
+  disabledMessage: string | null | undefined,
+  showDecisionButtons: boolean,
+  onRoll: () => void,
+  onChoice: (choice: ChoiceType) => void
+) {
+  const accent = state.currentPlayer === 1 ? GREEN : PURPLE;
+  return (
+    <div style={overlayPanelStyle(742, 646, 510, 62, 16, "#0c1422", accent)}>
+      <div style={{ position: "absolute", left: 18, top: 10, color: YELLOW, font: `15px ${FONT_FAMILY}` }}>
+        {showDecisionButtons ? "Choose action" : "Ready"}
+      </div>
+      <div style={{ position: "absolute", left: 18, top: 35, color: MUTED, font: `12px ${FONT_FAMILY}` }}>
+        {showDecisionButtons ? "Keyboard: 1 or 2" : "Roll for a district card."}
+      </div>
+
+      {showDecisionButtons ? (
+        <>
+          <button style={actionButtonStyle(188, 12, 140, 38, GREEN, !canPlay)} onClick={() => onChoice("eco")} disabled={!canPlay}>
+            Eco Plan
+          </button>
+          <button style={actionButtonStyle(343, 12, 140, 38, RED, !canPlay)} onClick={() => onChoice("quick")} disabled={!canPlay}>
+            Quick Fix
+          </button>
+        </>
+      ) : (
+        <button style={actionButtonStyle(323, 12, 140, 38, BLUE, !canPlay)} onClick={onRoll} disabled={!canPlay}>
+          Roll Dice
+        </button>
+      )}
+
+      {!canPlay && disabledMessage ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 16,
+            background: "rgba(2, 6, 23, 0.7)",
+            display: "grid",
+            placeItems: "center",
+            textAlign: "center",
+            padding: 16,
+            color: WHITE,
+            fontWeight: 700
+          }}
+        >
+          {disabledMessage}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function renderPlayerToken(player: PlayerState, color: string, label: string, offset: number) {
+  const rect = BOARD_POSITIONS[player.tile] ?? BOARD_POSITIONS[0]!;
+  const x = rect.x + rect.width / 2 + offset;
+  const y = rect.y + rect.height / 2 + 24;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: x - 16,
+        top: y - 16,
+        width: 32,
+        height: 32,
+        borderRadius: "50%",
+        background: color,
+        border: "2px solid #eef2ff",
+        boxShadow: "2px 3px 0 rgba(0,0,0,0.6)",
+        display: "grid",
+        placeItems: "center",
+        color: WHITE,
+        font: `700 15px ${FONT_FAMILY}`
+      }}
+    >
+      {label}
     </div>
   );
 }
@@ -212,31 +492,26 @@ function drawPlayScreen(context: CanvasRenderingContext2D, state: GameState) {
   context.lineTo(WIDTH, 78);
   context.stroke();
 
-  drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", "Carbon Quest", GREEN, 55, 35);
+  drawText(context, `700 30px ${FONT_FAMILY}`, "Carbon Quest", GREEN, 55, 35);
   roundRectFill(context, 330, 29, 610, 30, 15, "#0c1422");
-  drawText(context, "15px \"Segoe UI\", Arial, sans-serif", state.message.slice(0, 88), WHITE, 346, 48);
+  drawText(context, `15px ${FONT_FAMILY}`, state.message.slice(0, 88), WHITE, 346, 48);
 
   drawBoard(context, state);
-  drawCityVisual(context, state);
-  drawMeters(context, state);
-  drawPlayerPanels(context, state);
-  drawDecisionPanel(context, state);
-  drawActionBar(context, state);
 }
 
 function drawRulesScreen(context: CanvasRenderingContext2D) {
   const panel = { x: 55, y: 42, width: 1170, height: 620 };
   drawPanel(context, panel.x, panel.y, panel.width, panel.height, 22, "#0e1826", "#4ade80");
-  drawCenteredText(context, "800 46px \"Segoe UI\", Arial, sans-serif", "Rule Sheet", GREEN, WIDTH / 2, 76);
+  drawCenteredText(context, `800 46px ${FONT_FAMILY}`, "Rule Sheet", GREEN, WIDTH / 2, 76);
   let y = 130;
   RULES_TEXT.forEach((rule) => {
     context.fillStyle = YELLOW;
     context.beginPath();
     context.arc(90, y + 8, 5, 0, Math.PI * 2);
     context.fill();
-    const lines = wrapText(context, "18px \"Segoe UI\", Arial, sans-serif", rule, 1030);
+    const lines = wrapText(context, `18px ${FONT_FAMILY}`, rule, 1030);
     lines.forEach((line, index) => {
-      drawText(context, "18px \"Segoe UI\", Arial, sans-serif", line, WHITE, 110, y + 16 + index * 24);
+      drawText(context, `18px ${FONT_FAMILY}`, line, WHITE, 110, y + 16 + index * 24);
     });
     y += 58;
   });
@@ -248,11 +523,11 @@ function drawEndScreen(context: CanvasRenderingContext2D, state: GameState) {
   const scores = state.scores ?? calculateScores(state);
   const winner = state.winner;
   const title = state.carbon < 80 && state.health > 0 ? "City Survived!" : "Challenge Ended";
-  drawCenteredText(context, "800 46px \"Segoe UI\", Arial, sans-serif", title, state.carbon < 80 && state.health > 0 ? GREEN : RED, WIDTH / 2, 80);
-  drawCenteredText(context, "700 22px \"Segoe UI\", Arial, sans-serif", state.message, WHITE, WIDTH / 2, 130);
+  drawCenteredText(context, `800 46px ${FONT_FAMILY}`, title, state.carbon < 80 && state.health > 0 ? GREEN : RED, WIDTH / 2, 80);
+  drawCenteredText(context, `700 22px ${FONT_FAMILY}`, state.message, WHITE, WIDTH / 2, 130);
   drawCenteredText(
     context,
-    "700 30px \"Segoe UI\", Arial, sans-serif",
+    `700 30px ${FONT_FAMILY}`,
     winner === "draw" ? "It is a draw!" : `${winner === 1 ? state.player1.name : state.player2.name} wins!`,
     winner === "draw" ? YELLOW : winner === 1 ? GREEN : PURPLE,
     WIDTH / 2,
@@ -260,7 +535,7 @@ function drawEndScreen(context: CanvasRenderingContext2D, state: GameState) {
   );
   drawCenteredText(
     context,
-    "18px \"Segoe UI\", Arial, sans-serif",
+    `18px ${FONT_FAMILY}`,
     `Final carbon: ${state.carbon}  |  Health: ${state.health}  |  Resilience: ${state.resilience}`,
     WHITE,
     WIDTH / 2,
@@ -269,12 +544,12 @@ function drawEndScreen(context: CanvasRenderingContext2D, state: GameState) {
 
   [state.player1, state.player2].forEach((player, index) => {
     const x = 260 + index * 410;
-    drawPanel(context, x, 320, 350, 210, 16, PANEL_2, index === 0 ? GREEN : PURPLE);
-    drawCenteredText(context, "700 30px \"Segoe UI\", Arial, sans-serif", player.name, index === 0 ? GREEN : PURPLE, x + 175, 350);
-    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Score: ${scores[index]}`, WHITE, x + 35, 395);
-    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Budget: ${formatBudget(player.budget)}`, WHITE, x + 35, 425);
-    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Eco / Quick: ${player.ecoChoices} / ${player.quickChoices}`, WHITE, x + 35, 455);
-    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Policies: ${player.policies.length}`, WHITE, x + 35, 485);
+    drawPanel(context, x, 320, 350, 210, 16, PANEL_FILL, index === 0 ? GREEN : PURPLE);
+    drawCenteredText(context, `700 30px ${FONT_FAMILY}`, player.name, index === 0 ? GREEN : PURPLE, x + 175, 350);
+    drawText(context, `18px ${FONT_FAMILY}`, `Score: ${scores[index]}`, WHITE, x + 35, 395);
+    drawText(context, `18px ${FONT_FAMILY}`, `Budget: ${formatBudget(player.budget)}`, WHITE, x + 35, 425);
+    drawText(context, `18px ${FONT_FAMILY}`, `Eco / Quick: ${player.ecoChoices} / ${player.quickChoices}`, WHITE, x + 35, 455);
+    drawText(context, `18px ${FONT_FAMILY}`, `Policies: ${player.policies.length}`, WHITE, x + 35, 485);
   });
 }
 
@@ -319,203 +594,13 @@ function drawBoard(context: CanvasRenderingContext2D, state: GameState) {
     roundRectFill(context, rect.x, rect.y, rect.width, rect.height, 14, color);
     roundRectFill(context, rect.x, rect.y, rect.width, rect.height / 2, 14, lerpColor(color, WHITE, 0.28));
     roundRectStroke(context, rect.x, rect.y, rect.width, rect.height, 14, "#0f172a", 3);
-    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", String(index + 1), INK, rect.x + 8, rect.y + 18);
-    drawZoneIcon(context, tile.zone, rect.x + rect.width / 2, rect.y + 34, INK);
-    const lines = wrapText(context, "12px \"Segoe UI\", Arial, sans-serif", tile.zone, rect.width - 10).slice(0, 2);
+    drawText(context, `12px ${FONT_FAMILY}`, String(index + 1), "#080d18", rect.x + 8, rect.y + 18);
+    drawZoneIcon(context, tile.zone, rect.x + rect.width / 2, rect.y + 34, "#080d18");
+    const lines = wrapText(context, `12px ${FONT_FAMILY}`, tile.zone, rect.width - 10).slice(0, 2);
     lines.forEach((line, lineIndex) => {
-      drawCenteredText(context, "12px \"Segoe UI\", Arial, sans-serif", line, INK, rect.x + rect.width / 2, rect.y + 62 + lineIndex * 13);
+      drawCenteredText(context, `12px ${FONT_FAMILY}`, line, "#080d18", rect.x + rect.width / 2, rect.y + 62 + lineIndex * 13);
     });
   });
-
-  drawPlayerToken(context, BOARD_POSITIONS[state.player1.tile]!, GREEN, "1", -14);
-  drawPlayerToken(context, BOARD_POSITIONS[state.player2.tile]!, PURPLE, "2", 14);
-}
-
-function drawCityVisual(context: CanvasRenderingContext2D, state: GameState) {
-  const x = 155;
-  const y = 230;
-  const width = 455;
-  const height = 190;
-  const pollution = state.carbon / 100;
-  drawPanel(context, x - 12, y - 12, width + 24, height + 24, 16, "#0c1220", "#374b60");
-
-  const skyTop = lerpColor("#3e84be", "#82464b", pollution);
-  const skyBottom = lerpColor("#fcb268", "#924c45", pollution);
-  const gradient = context.createLinearGradient(0, y, 0, y + height);
-  gradient.addColorStop(0, skyTop);
-  gradient.addColorStop(1, skyBottom);
-  context.fillStyle = gradient;
-  context.fillRect(x, y, width, height);
-
-  context.fillStyle = "rgba(255,218,130,0.95)";
-  context.beginPath();
-  context.arc(x + width - 60, y + 45, 28, 0, Math.PI * 2);
-  context.fill();
-
-  context.fillStyle = "#24303b";
-  context.beginPath();
-  context.moveTo(x, y + height);
-  context.lineTo(x, y + height - 45);
-  context.lineTo(x + 130, y + height - 80);
-  context.lineTo(x + 250, y + height - 54);
-  context.lineTo(x + width, y + height - 95);
-  context.lineTo(x + width, y + height);
-  context.closePath();
-  context.fill();
-
-  [
-    [190, 90],
-    [245, 120],
-    [320, 75],
-    [380, 130],
-    [465, 95],
-    [530, 118]
-  ].forEach(([offsetX, buildingHeight]) => {
-    const bx = offsetX;
-    const buildingX = bx;
-    const buildingY = y + height - buildingHeight;
-    const shade = lerpColor("#2d3748", "#524142", pollution);
-    roundRectFill(context, buildingX, buildingY, 42, buildingHeight, 5, shade);
-    roundRectStroke(context, buildingX, buildingY, 42, buildingHeight, 5, "#0a0f18", 2);
-    context.fillStyle = "#ffe68c";
-    for (let windowY = buildingY + 12; windowY < buildingY + buildingHeight - 10; windowY += 20) {
-      roundRectFill(context, buildingX + 12, windowY, 8, 10, 2, "#ffe68c");
-    }
-  });
-
-  const treeCount = Math.max(1, Math.floor(state.resilience / 12));
-  for (let index = 0; index < treeCount; index += 1) {
-    const treeX = x + 25 + index * 45;
-    context.fillStyle = "#5e3c23";
-    context.fillRect(treeX, y + height - 28, 8, 22);
-    context.fillStyle = GREEN;
-    context.beginPath();
-    context.arc(treeX + 4, y + height - 35, 15, 0, Math.PI * 2);
-    context.fill();
-  }
-
-  context.fillStyle = `rgba(230,80,60,${0.3 * pollution})`;
-  context.fillRect(x, y, width, height);
-  roundRectStroke(context, x, y, width, height, 10, WHITE, 2);
-  drawCenteredText(context, "12px \"Segoe UI\", Arial, sans-serif", "Live city view changes with carbon and resilience", WHITE, x + width / 2, y + height + 16);
-}
-
-function drawMeters(context: CanvasRenderingContext2D, state: GameState) {
-  drawPanel(context, 742, 86, 510, 245, 18, "#0e1726", "#374b60");
-  drawText(context, "700 22px \"Segoe UI\", Arial, sans-serif", "City Dashboard", WHITE, 765, 118);
-  const labels: Array<[string, number, string]> = [
-    ["Carbon", state.carbon, RED],
-    ["Health", state.health, GREEN],
-    ["Resilience", state.resilience, BLUE]
-  ];
-
-  labels.forEach(([label, value, color], index) => {
-    const x = 765;
-    const y = 150 + index * 58;
-    drawText(context, "700 22px \"Segoe UI\", Arial, sans-serif", `${label}: ${value}`, color, x, y);
-    roundRectFill(context, x + 145, y - 9, 320, 18, 10, "#0f172a");
-    roundRectFill(context, x + 147, y - 7, Math.max(0, (316 * value) / 100), 14, 8, color);
-  });
-}
-
-function drawPlayerPanels(context: CanvasRenderingContext2D, state: GameState) {
-  [state.player1, state.player2].forEach((player, index) => {
-    const rectX = 742 + index * 260;
-    const rectY = 338;
-    const accent = index === 0 ? GREEN : PURPLE;
-    const isActive = state.currentPlayer === index + 1;
-    if (isActive) {
-      drawGlow(context, rectX, rectY, 245, 142, accent, 0.32);
-    }
-    drawPanel(context, rectX, rectY, 245, 142, 12, PANEL_2, isActive ? accent : "#475569");
-    drawPill(context, rectX + 161, rectY + 14, 62, 22, isActive ? "TURN" : "WAIT", isActive ? accent : "#334155");
-    drawText(context, "700 22px \"Segoe UI\", Arial, sans-serif", player.name, accent, rectX + 16, rectY + 34);
-    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", `Budget: ${formatBudget(player.budget)}`, WHITE, rectX + 16, rectY + 64);
-    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", `Support: ${player.support}`, WHITE, rectX + 16, rectY + 88);
-    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", `Green points: ${player.greenPoints}`, GREEN, rectX + 16, rectY + 112);
-    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", `Policies: ${player.policies.length > 0 ? player.policies.join(", ") : "None"}`.slice(0, 34), MUTED, rectX + 16, rectY + 132);
-  });
-}
-
-function drawDecisionPanel(context: CanvasRenderingContext2D, state: GameState) {
-  drawPanel(context, 742, 490, 510, 150, 12, PANEL_2, "#475569");
-  if (state.selectedEvent) {
-    context.fillStyle = PURPLE;
-    roundRectFill(context, 742, 490, 8, 150, 12, PURPLE);
-    drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", `EVENT: ${state.selectedEvent.title}`, PURPLE, 758, 520);
-    wrapText(context, "15px \"Segoe UI\", Arial, sans-serif", state.selectedEvent.text, 460).slice(0, 3).forEach((line, index) => {
-      drawText(context, "15px \"Segoe UI\", Arial, sans-serif", line, WHITE, 758, 552 + index * 20);
-    });
-    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", "Pick an action", YELLOW, 758, 620);
-    return;
-  }
-
-  if (!state.selectedCard) {
-    const activeColor = state.currentPlayer === 1 ? GREEN : PURPLE;
-    drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", `${state.currentPlayer === 1 ? state.player1.name : state.player2.name}'s Turn`, activeColor, 758, 520);
-    drawPill(context, 1114, 504, 108, 24, `Round ${Math.min(state.round, state.maxRounds)}/${state.maxRounds}`, BLUE);
-    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Dice: ${state.dice}`, WHITE, 758, 566);
-    return;
-  }
-
-  const card = state.selectedCard;
-  const zoneColor = ZONE_COLORS[card.zone] ?? BLUE;
-  roundRectFill(context, 742, 490, 8, 150, 12, zoneColor);
-  drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", card.title, zoneColor, 758, 518);
-  drawZoneIcon(context, card.zone, 1220, 522, zoneColor);
-
-  drawChoiceBox(context, 758, 550, 225, 75, "ECO", "#10502d", "#86efac", card.eco, card.ecoEffect);
-  drawChoiceBox(context, 998, 550, 225, 75, "QUICK", "#641919", "#fecaca", card.quick, card.quickEffect);
-}
-
-function drawActionBar(context: CanvasRenderingContext2D, state: GameState) {
-  const accent = state.currentPlayer === 1 ? GREEN : PURPLE;
-  drawPanel(context, 742, 646, 510, 62, 16, "#0c1422", accent);
-  if (state.selectedCard || state.selectedEvent) {
-    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", "Choose action", YELLOW, 760, 670);
-    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", "Keyboard: 1 or 2", MUTED, 760, 694);
-  } else {
-    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", "Ready", YELLOW, 760, 670);
-    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", "Roll for a district card.", MUTED, 760, 694);
-  }
-}
-
-function drawChoiceBox(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  title: string,
-  background: string,
-  titleColor: string,
-  body: string,
-  effect: [number, number, number, number, number]
-) {
-  drawPanel(context, x, y, width, height, 9, background, background);
-  drawText(context, "700 15px \"Segoe UI\", Arial, sans-serif", title, titleColor, x + 12, y + 18);
-  drawText(context, "12px \"Segoe UI\", Arial, sans-serif", body, WHITE, x + 12, y + 38);
-  drawText(context, "12px \"Segoe UI\", Arial, sans-serif", `Carbon ${effect[0] >= 0 ? "+" : ""}${effect[0]}   Health ${effect[1] >= 0 ? "+" : ""}${effect[1]}`, WHITE, x + 12, y + 55);
-  drawText(context, "12px \"Segoe UI\", Arial, sans-serif", `Cost: ${formatBudget(Math.abs(effect[2]))}`, WHITE, x + 12, y + 68);
-}
-
-function drawPlayerToken(context: CanvasRenderingContext2D, rect: { x: number; y: number; width: number; height: number }, color: string, label: string, offset: number) {
-  const x = rect.x + rect.width / 2 + offset;
-  const y = rect.y + rect.height / 2 + 24;
-  context.fillStyle = "rgba(0,0,0,0.6)";
-  context.beginPath();
-  context.arc(x + 2, y + 3, 16, 0, Math.PI * 2);
-  context.fill();
-  context.fillStyle = color;
-  context.beginPath();
-  context.arc(x, y, 16, 0, Math.PI * 2);
-  context.fill();
-  context.strokeStyle = WHITE;
-  context.lineWidth = 2;
-  context.beginPath();
-  context.arc(x, y, 16, 0, Math.PI * 2);
-  context.stroke();
-  drawCenteredText(context, "700 15px \"Segoe UI\", Arial, sans-serif", label, WHITE, x, y + 5);
 }
 
 function buildBoardPositions() {
@@ -566,12 +651,6 @@ function drawPanel(context: CanvasRenderingContext2D, x: number, y: number, widt
   roundRectFill(context, x + 5, y + 7, width, height, radius, "#030712");
   roundRectFill(context, x, y, width, height, radius, fill);
   roundRectStroke(context, x, y, width, height, radius, border, 2);
-}
-
-function drawPill(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, text: string, color: string) {
-  roundRectFill(context, x, y, width, height, height / 2, color);
-  roundRectStroke(context, x, y, width, height, height / 2, WHITE, 1);
-  drawCenteredText(context, "12px \"Segoe UI\", Arial, sans-serif", text, WHITE, x + width / 2, y + height / 2 + 4);
 }
 
 function drawGlow(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, color: string, alpha: number) {
@@ -707,6 +786,27 @@ function wrapText(context: CanvasRenderingContext2D, font: string, text: string,
   return lines;
 }
 
+function wrapTextLines(text: string, maxLength: number) {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  words.forEach((word) => {
+    const test = current ? `${current} ${word}` : word;
+    if (test.length <= maxLength) {
+      current = test;
+    } else {
+      if (current) {
+        lines.push(current);
+      }
+      current = word;
+    }
+  });
+  if (current) {
+    lines.push(current);
+  }
+  return lines;
+}
+
 function lerpColor(start: string, end: string, t: number) {
   const a = hexToRgb(start);
   const b = hexToRgb(end);
@@ -728,11 +828,63 @@ function hexToRgb(color: string) {
   };
 }
 
-function buttonStyle(x: number, y: number, width: number, height: number, color: string, disabled = false): CSSProperties {
+function clamp(value: number, low: number, high: number) {
+  return Math.max(low, Math.min(high, value));
+}
+
+function overlayPanelStyle(x: number, y: number, width: number, height: number, radius: number, fill: string, border: string): CSSProperties {
   return {
     position: "absolute",
     left: x,
     top: y,
+    width,
+    height,
+    borderRadius: radius,
+    background: fill,
+    border: `2px solid ${border}`,
+    boxShadow: "5px 7px 0 #030712"
+  };
+}
+
+function pillAbsoluteStyle(left: number, top: number, width: number, height: number, color: string): CSSProperties {
+  return {
+    position: "absolute",
+    left,
+    top,
+    width,
+    height,
+    borderRadius: height / 2,
+    background: color,
+    border: "1px solid #eef2ff",
+    color: WHITE,
+    display: "grid",
+    placeItems: "center",
+    font: `12px ${FONT_FAMILY}`
+  };
+}
+
+function buttonStyle(left: number, top: number, width: number, height: number, color: string): CSSProperties {
+  return {
+    position: "absolute",
+    left,
+    top,
+    width,
+    height,
+    borderRadius: 20,
+    border: "2px solid rgba(255,255,255,0.8)",
+    background: color,
+    color: WHITE,
+    font: `700 15px ${FONT_FAMILY}`,
+    boxShadow: "0 6px 0 rgba(0,0,0,0.3)",
+    cursor: "pointer"
+  };
+}
+
+function actionButtonStyle(left: number, top: number, width: number, height: number, color: string, disabled: boolean): CSSProperties {
+  return {
+    position: "absolute",
+    left,
+    top,
     width,
     height,
     borderRadius: 20,
@@ -744,4 +896,3 @@ function buttonStyle(x: number, y: number, width: number, height: number, color:
     cursor: disabled ? "not-allowed" : "pointer"
   };
 }
-
