@@ -21,7 +21,6 @@ export default function OnlineSessionPage() {
   const player = (routeState?.player ?? storedPlayer ?? 0) as 1 | 2;
   const [state, setState] = useState<GameState>(routeState?.initialState ?? createInitialState());
   const [hasRemoteState, setHasRemoteState] = useState(Boolean(routeState?.initialState));
-  const [showBankruptcyOverlay, setShowBankruptcyOverlay] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -51,11 +50,6 @@ export default function OnlineSessionPage() {
         setState(message.state);
         setHasRemoteState(true);
         setToast(null);
-        if (message.state.gameOverReason === "bankruptcy") {
-          setShowBankruptcyOverlay(true);
-        } else {
-          setShowBankruptcyOverlay(false);
-        }
       }
       if (message.type === "PLAYER_DISCONNECTED") {
         const disconnectedPlayer = message.player ?? (player === 1 ? 2 : 1);
@@ -84,13 +78,13 @@ export default function OnlineSessionPage() {
   }, [hasRemoteState, status, toast]);
 
   const canPlay = hasRemoteState && !state.gameOver && state.currentPlayer === player;
-  const currentBudget = player === 1 ? state.player1.budget : state.player2.budget;
-
   let disabledMessage: string | null = null;
   if (!hasRemoteState) {
     disabledMessage = player === 1 ? "Waiting for the session to start..." : "Waiting for Player 1 to start the game...";
   } else if (!canPlay && !state.gameOver) {
-    disabledMessage = `Waiting for Player ${state.currentPlayer}...`;
+    disabledMessage = state.selectedCard || state.selectedEvent
+      ? `Waiting for Player ${state.currentPlayer} to choose a plan...`
+      : `Waiting for Player ${state.currentPlayer} to roll the dice...`;
   }
 
   return (
@@ -117,19 +111,14 @@ export default function OnlineSessionPage() {
       <GameBoard
         state={state}
         canPlay={canPlay}
-        currentBudget={currentBudget}
         disabledMessage={disabledMessage}
+        onRoll={() => sendMessage({ type: "ROLL_DICE" })}
         onChoice={(choice) => sendMessage({ type: "MAKE_CHOICE", choice })}
-        onPlayAgain={() => {
-          setShowBankruptcyOverlay(false);
-          sendMessage({ type: "PLAY_AGAIN" });
-        }}
+        onPlayAgain={() => sendMessage({ type: "PLAY_AGAIN" })}
         onQuit={() => {
           sendMessage({ type: "QUIT" });
           navigate("/", { replace: true });
         }}
-        showBankruptcyOverlay={showBankruptcyOverlay}
-        onDismissBankruptcyOverlay={() => setShowBankruptcyOverlay(false)}
       />
     </div>
   );

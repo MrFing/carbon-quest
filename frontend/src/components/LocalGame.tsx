@@ -5,19 +5,16 @@ import { useGameState } from "../hooks/useGameState";
 
 export default function LocalGame() {
   const navigate = useNavigate();
-  const { state, makeLocalChoice, resetGame, showBankruptcyOverlay, dismissBankruptcyOverlay } = useGameState();
-  const currentBudget = state.currentPlayer === 1 ? state.player1.budget : state.player2.budget;
+  const { state, rollLocalDice, makeLocalChoice, resetGame } = useGameState();
 
   return (
     <GameBoard
       state={state}
       canPlay={!state.gameOver}
-      currentBudget={currentBudget}
+      onRoll={rollLocalDice}
       onChoice={makeLocalChoice}
       onPlayAgain={resetGame}
       onQuit={() => navigate("/")}
-      showBankruptcyOverlay={showBankruptcyOverlay}
-      onDismissBankruptcyOverlay={dismissBankruptcyOverlay}
     />
   );
 }

@@ -1,116 +1,55 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
-import type { ChoiceType, GameState, Zone } from "../game/types";
-import { getSkyColors } from "../utils/carbonGradient";
-import HUD from "./HUD";
-import CarbonMeter from "./CarbonMeter";
-import CardPanel from "./CardPanel";
-import EndScreen from "./EndScreen";
+import type { ChoiceType, DecisionCard, GameState, PlayerState, Zone } from "../game/types";
+import { RULES_TEXT, ZONE_COLORS } from "../game/cards";
+import { calculateScores } from "../game/gameLogic";
+import { formatBudget } from "../utils/formatBudget";
 
 interface GameBoardProps {
   state: GameState;
   canPlay: boolean;
-  currentBudget: number;
   disabledMessage?: string | null;
+  onRoll: () => void;
   onChoice: (choice: ChoiceType) => void;
   onPlayAgain: () => void;
   onQuit: () => void;
-  showBankruptcyOverlay?: boolean;
-  onDismissBankruptcyOverlay?: () => void;
 }
 
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-  color: string;
-  kind: "leaf" | "smoke";
+const WIDTH = 1280;
+const HEIGHT = 720;
+const FONT_FAMILY = '"Segoe UI", Arial, sans-serif';
+const BG = "#151923";
+const PANEL = "#1f2937";
+const PANEL_2 = "#111827";
+const INK = "#080d18";
+const WHITE = "#eef2ff";
+const MUTED = "#94a3b8";
+const GREEN = "#22c55e";
+const RED = "#ef4444";
+const YELLOW = "#facc15";
+const BLUE = "#60a5fa";
+const PURPLE = "#a78bfa";
+const ORANGE = "#fb923c";
+
+const BOARD_POSITIONS = buildBoardPositions();
+
+function clamp(value: number, low: number, high: number) {
+  return Math.max(low, Math.min(high, value));
 }
 
-const zoneCenters: Record<Zone, { x: number; y: number }> = {
-  transport: { x: 150, y: 440 },
-  energy: { x: 360, y: 420 },
-  waste: { x: 570, y: 450 },
-  greenspace: { x: 760, y: 445 }
-};
-
-const zoneBuildings: Record<Zone, Array<{ x: number; y: number; width: number; height: number }>> = {
-  transport: [
-    { x: 48, y: 244, width: 36, height: 270 },
-    { x: 92, y: 318, width: 84, height: 196 },
-    { x: 150, y: 380, width: 48, height: 134 }
-  ],
-  energy: [
-    { x: 252, y: 266, width: 40, height: 248 },
-    { x: 302, y: 324, width: 90, height: 190 },
-    { x: 364, y: 368, width: 46, height: 146 }
-  ],
-  waste: [
-    { x: 454, y: 336, width: 78, height: 178 },
-    { x: 520, y: 272, width: 40, height: 242 },
-    { x: 574, y: 388, width: 52, height: 126 }
-  ],
-  greenspace: [
-    { x: 660, y: 290, width: 38, height: 224 },
-    { x: 708, y: 344, width: 84, height: 170 },
-    { x: 766, y: 388, width: 46, height: 126 }
-  ]
-};
-
-function scoreColor(score: number): string {
-  const amount = Math.max(-6, Math.min(6, score));
-  if (amount >= 0) {
-    const t = amount / 6;
-    return `rgb(${Math.round(122 - 88 * t)}, ${Math.round(130 + 88 * t)}, ${Math.round(144 - 24 * t)})`;
-  }
-  const t = Math.abs(amount) / 6;
-  return `rgb(${Math.round(122 + 120 * t)}, ${Math.round(130 - 60 * t)}, ${Math.round(144 - 70 * t)})`;
-}
-
-export default function GameBoard({
-  state,
-  canPlay,
-  currentBudget,
-  disabledMessage,
-  onChoice,
-  onPlayAgain,
-  onQuit,
-  showBankruptcyOverlay = false,
-  onDismissBankruptcyOverlay
-}: GameBoardProps) {
+export default function GameBoard({ state, canPlay, disabledMessage, onRoll, onChoice, onPlayAgain, onQuit }: GameBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const outerRef = useRef<HTMLDivElement | null>(null);
   const stateRef = useRef(state);
-  const lastMoveRef = useRef<number | null>(state.lastMove?.timestamp ?? null);
-  const particlesRef = useRef<Particle[]>([]);
-  const shakeUntilRef = useRef(0);
-  const displayCarbonRef = useRef(state.carbonLevel);
-  const scaleRef = useRef(1);
   const [scale, setScale] = useState(1);
-
-  const stars = useMemo(
-    () =>
-      Array.from({ length: 60 }, (_, index) => ({
-        x: 22 + ((index * 119) % 860),
-        y: 28 + ((index * 53) % 210),
-        size: 1 + (index % 2),
-        offset: index * 0.35
-      })),
-    []
-  );
+  const [showRules, setShowRules] = useState(false);
 
   stateRef.current = state;
 
   useLayoutEffect(() => {
     const resize = () => {
-      const width = Math.min(window.innerWidth - 32, 1280);
-      const nextScale = width / 1280;
-      scaleRef.current = nextScale;
-      setScale(nextScale);
+      const widthScale = Math.min((window.innerWidth - 32) / WIDTH, 1);
+      const heightScale = Math.min((window.innerHeight - 32) / HEIGHT, 1);
+      setScale(Math.max(0.5, Math.min(widthScale, heightScale)));
     };
     resize();
     window.addEventListener("resize", resize);
@@ -118,31 +57,29 @@ export default function GameBoard({
   }, []);
 
   useEffect(() => {
-    const moveTimestamp = state.lastMove?.timestamp ?? null;
-    if (moveTimestamp && moveTimestamp !== lastMoveRef.current && state.lastMove) {
-      lastMoveRef.current = moveTimestamp;
-      const center = zoneCenters[state.lastMove.zone];
-      const isEco = state.lastMove.choice === "eco";
-      for (let index = 0; index < 18; index += 1) {
-        const angle = isEco ? Math.PI + (index / 18) * Math.PI : Math.PI + ((index * 0.8) / 18) * Math.PI;
-        const speed = isEco ? 32 + index * 2 : 24 + index * 1.6;
-        particlesRef.current.push({
-          x: center.x,
-          y: center.y,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          life: isEco ? 1.2 : 1.4,
-          maxLife: isEco ? 1.2 : 1.4,
-          size: isEco ? 6 + (index % 3) : 8 + (index % 4),
-          color: isEco ? "#22c55e" : "#94a3b8",
-          kind: isEco ? "leaf" : "smoke"
-        });
+    const listener = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (showRules) {
+          setShowRules(false);
+        }
+        return;
       }
-      if (state.lastMove.choice === "quick" || state.carbonLevel >= 80) {
-        shakeUntilRef.current = performance.now() + 600;
+      if (stateRef.current.gameOver) {
+        return;
       }
-    }
-  }, [state.carbonLevel, state.lastMove]);
+      if ((event.key === "r" || event.key === "R") && canPlay && !stateRef.current.selectedCard && !stateRef.current.selectedEvent) {
+        onRoll();
+      }
+      if (event.key === "1" && canPlay && (stateRef.current.selectedCard || stateRef.current.selectedEvent)) {
+        onChoice("eco");
+      }
+      if (event.key === "2" && canPlay && (stateRef.current.selectedCard || stateRef.current.selectedEvent)) {
+        onChoice("quick");
+      }
+    };
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, [canPlay, onChoice, onRoll, showRules]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -155,103 +92,109 @@ export default function GameBoard({
     }
 
     let frameId = 0;
-    let lastFrame = performance.now();
-
-    const draw = (now: number) => {
-      const dt = Math.min(0.033, (now - lastFrame) / 1000);
-      lastFrame = now;
+    const drawFrame = () => {
       const currentState = stateRef.current;
-      displayCarbonRef.current += (currentState.carbonLevel - displayCarbonRef.current) * Math.min(1, dt * 6);
-
-      context.clearRect(0, 0, 1280, 720);
-      context.fillStyle = "#0d1117";
-      context.fillRect(0, 0, 1280, 720);
-
-      const shake = now < shakeUntilRef.current ? 4 : 0;
-      const shakeX = shake > 0 ? Math.sin(now / 24) * shake : 0;
-      const shakeY = shake > 0 ? Math.cos(now / 28) * shake * 0.6 : 0;
-
-      context.save();
-      context.translate(shakeX, shakeY);
-      drawScene(context, currentState, displayCarbonRef.current, particlesRef.current, stars, now, dt);
-      context.restore();
-
-      frameId = window.requestAnimationFrame(draw);
-    };
-
-    frameId = window.requestAnimationFrame(draw);
-    return () => window.cancelAnimationFrame(frameId);
-  }, [stars]);
-
-  useEffect(() => {
-    const listener = (event: KeyboardEvent) => {
-      if (event.code === "Space" && showBankruptcyOverlay) {
-        event.preventDefault();
-        onDismissBankruptcyOverlay?.();
+      context.clearRect(0, 0, WIDTH, HEIGHT);
+      drawGradientBackground(context);
+      if (showRules) {
+        drawRulesScreen(context);
+      } else if (currentState.gameOver) {
+        drawEndScreen(context, currentState);
+      } else {
+        drawPlayScreen(context, currentState);
       }
+      frameId = window.requestAnimationFrame(drawFrame);
     };
-    window.addEventListener("keydown", listener);
-    return () => window.removeEventListener("keydown", listener);
-  }, [onDismissBankruptcyOverlay, showBankruptcyOverlay]);
+
+    frameId = window.requestAnimationFrame(drawFrame);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [showRules]);
+
+  const showDecisionButtons = !state.gameOver && !!(state.selectedCard || state.selectedEvent);
+  const showRollButton = !state.gameOver && !state.selectedCard && !state.selectedEvent;
 
   return (
-    <div className="page-center" style={{ alignItems: "flex-start", paddingTop: 24, paddingBottom: 24 }}>
+    <div className="page-center" style={{ alignItems: "flex-start", paddingTop: 16, paddingBottom: 16 }}>
       <div
-        ref={outerRef}
         style={{
-          width: "min(calc(100vw - 32px), 1280px)",
-          height: 720 * scale,
+          width: WIDTH * scale,
+          height: HEIGHT * scale,
           position: "relative"
         }}
       >
         <div
           style={{
-            width: 1280,
-            height: 720,
             position: "absolute",
             inset: 0,
+            width: WIDTH,
+            height: HEIGHT,
             transform: `scale(${scale})`,
             transformOrigin: "top left"
           }}
         >
-          <canvas ref={canvasRef} width={1280} height={720} style={{ position: "absolute", inset: 0, width: 1280, height: 720 }} />
-          <HUD state={state} />
-          <CarbonMeter value={state.carbonLevel} />
-          <CardPanel card={state.currentCard} currentBudget={currentBudget} canPlay={canPlay && !state.gameOver} disabledMessage={disabledMessage} onChoice={onChoice} />
+          <canvas ref={canvasRef} width={WIDTH} height={HEIGHT} style={{ position: "absolute", inset: 0, width: WIDTH, height: HEIGHT }} />
 
-          {showBankruptcyOverlay ? (
+          {!state.gameOver && !showRules ? (
+            <button style={buttonStyle(1090, 28, 140, 38, ORANGE)} onClick={() => setShowRules(true)}>
+              Rules
+            </button>
+          ) : null}
+
+          {showRules ? (
+            <button style={buttonStyle(40, 650, 140, 42, BLUE)} onClick={() => setShowRules(false)}>
+              Back
+            </button>
+          ) : null}
+
+          {!showRules && !state.gameOver && showRollButton ? (
+            <button style={buttonStyle(1065, 660, 140, 38, BLUE, !canPlay)} onClick={onRoll} disabled={!canPlay}>
+              Roll Dice
+            </button>
+          ) : null}
+
+          {!showRules && !state.gameOver && showDecisionButtons ? (
+            <>
+              <button style={buttonStyle(930, 660, 140, 38, GREEN, !canPlay)} onClick={() => onChoice("eco")} disabled={!canPlay}>
+                Eco Plan
+              </button>
+              <button style={buttonStyle(1085, 660, 140, 38, RED, !canPlay)} onClick={() => onChoice("quick")} disabled={!canPlay}>
+                Quick Fix
+              </button>
+            </>
+          ) : null}
+
+          {state.gameOver && !showRules ? (
+            <>
+              <button style={buttonStyle(525, 640, 140, 44, GREEN)} onClick={onPlayAgain}>
+                Restart
+              </button>
+              <button style={buttonStyle(690, 640, 120, 44, RED)} onClick={onQuit}>
+                Quit
+              </button>
+            </>
+          ) : null}
+
+          {!showRules && !state.gameOver && disabledMessage ? (
             <div
               style={{
                 position: "absolute",
-                inset: 0,
-                background: "rgba(0,0,0,0.72)",
+                left: 742,
+                top: 646,
+                width: 510,
+                height: 62,
+                borderRadius: 16,
+                background: "rgba(2, 6, 23, 0.7)",
                 display: "grid",
-                placeItems: "center"
+                placeItems: "center",
+                textAlign: "center",
+                padding: 16,
+                color: WHITE,
+                fontWeight: 700,
+                pointerEvents: "none"
               }}
             >
-              <div
-                style={{
-                  width: 800,
-                  height: 320,
-                  borderRadius: 20,
-                  background: "#1a0000",
-                  border: "3px solid #ef4444",
-                  display: "grid",
-                  placeItems: "center",
-                  textAlign: "center",
-                  padding: 24
-                }}
-              >
-                <div style={{ fontSize: 64, fontWeight: 900, color: "#ef4444" }}>BANKRUPT!</div>
-                <div style={{ fontSize: 24, color: "#fca5a5" }}>{state.currentPlayer === 1 ? state.player1.name : state.player2.name} has run out of money!</div>
-                <div style={{ fontSize: 18, color: "#94a3b8" }}>The city cannot sustain further investment.</div>
-                <div style={{ fontSize: 16, color: "#64748b" }}>Press SPACE to see results</div>
-              </div>
+              {disabledMessage}
             </div>
-          ) : null}
-
-          {state.gameOver && (!showBankruptcyOverlay || state.gameOverReason !== "bankruptcy") ? (
-            <EndScreen state={state} onPlayAgain={onPlayAgain} onQuit={onQuit} />
           ) : null}
         </div>
       </div>
@@ -259,165 +202,442 @@ export default function GameBoard({
   );
 }
 
-function drawScene(
-  context: CanvasRenderingContext2D,
-  state: GameState,
-  carbonLevel: number,
-  particles: Particle[],
-  stars: Array<{ x: number; y: number; size: number; offset: number }>,
-  now: number,
-  dt: number
-) {
-  const [skyTop, skyMid, skyBottom] = getSkyColors(carbonLevel);
-  const gradient = context.createLinearGradient(0, 90, 0, 630);
-  gradient.addColorStop(0, skyTop);
-  gradient.addColorStop(0.65, skyMid);
-  gradient.addColorStop(1, skyBottom);
-  context.fillStyle = gradient;
-  context.fillRect(0, 90, 900, 630);
-
-  context.fillStyle = "#111827";
-  context.fillRect(900, 90, 380, 630);
-  context.strokeStyle = "rgba(255,255,255,0.12)";
+function drawPlayScreen(context: CanvasRenderingContext2D, state: GameState) {
+  context.fillStyle = "rgba(8, 13, 24, 0.85)";
+  context.fillRect(0, 0, WIDTH, 78);
+  context.strokeStyle = "#374b60";
+  context.lineWidth = 2;
   context.beginPath();
-  context.moveTo(908, 90);
-  context.lineTo(908, 720);
+  context.moveTo(0, 78);
+  context.lineTo(WIDTH, 78);
   context.stroke();
 
-  stars.forEach((star) => {
-    const alpha = 0.35 + ((Math.sin(now / 800 + star.offset) + 1) / 2) * 0.65;
-    context.fillStyle = `rgba(255,255,255,${alpha})`;
+  drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", "Carbon Quest", GREEN, 55, 35);
+  roundRectFill(context, 330, 29, 610, 30, 15, "#0c1422");
+  drawText(context, "15px \"Segoe UI\", Arial, sans-serif", state.message.slice(0, 88), WHITE, 346, 48);
+
+  drawBoard(context, state);
+  drawCityVisual(context, state);
+  drawMeters(context, state);
+  drawPlayerPanels(context, state);
+  drawDecisionPanel(context, state);
+  drawActionBar(context, state);
+}
+
+function drawRulesScreen(context: CanvasRenderingContext2D) {
+  const panel = { x: 55, y: 42, width: 1170, height: 620 };
+  drawPanel(context, panel.x, panel.y, panel.width, panel.height, 22, "#0e1826", "#4ade80");
+  drawCenteredText(context, "800 46px \"Segoe UI\", Arial, sans-serif", "Rule Sheet", GREEN, WIDTH / 2, 76);
+  let y = 130;
+  RULES_TEXT.forEach((rule) => {
+    context.fillStyle = YELLOW;
     context.beginPath();
-    context.arc(star.x, star.y + 100, star.size, 0, Math.PI * 2);
+    context.arc(90, y + 8, 5, 0, Math.PI * 2);
     context.fill();
+    const lines = wrapText(context, "18px \"Segoe UI\", Arial, sans-serif", rule, 1030);
+    lines.forEach((line, index) => {
+      drawText(context, "18px \"Segoe UI\", Arial, sans-serif", line, WHITE, 110, y + 16 + index * 24);
+    });
+    y += 58;
   });
+}
 
-  context.fillStyle = "rgba(255, 190, 150, 0.75)";
-  context.beginPath();
-  context.arc(740, 180, 34, 0, Math.PI * 2);
-  context.fill();
+function drawEndScreen(context: CanvasRenderingContext2D, state: GameState) {
+  const panel = { x: 145, y: 50, width: 990, height: 610 };
+  drawPanel(context, panel.x, panel.y, panel.width, panel.height, 24, "#0e1826", "#4ade80");
+  const scores = state.scores ?? calculateScores(state);
+  const winner = state.winner;
+  const title = state.carbon < 80 && state.health > 0 ? "City Survived!" : "Challenge Ended";
+  drawCenteredText(context, "800 46px \"Segoe UI\", Arial, sans-serif", title, state.carbon < 80 && state.health > 0 ? GREEN : RED, WIDTH / 2, 80);
+  drawCenteredText(context, "700 22px \"Segoe UI\", Arial, sans-serif", state.message, WHITE, WIDTH / 2, 130);
+  drawCenteredText(
+    context,
+    "700 30px \"Segoe UI\", Arial, sans-serif",
+    winner === "draw" ? "It is a draw!" : `${winner === 1 ? state.player1.name : state.player2.name} wins!`,
+    winner === "draw" ? YELLOW : winner === 1 ? GREEN : PURPLE,
+    WIDTH / 2,
+    205
+  );
+  drawCenteredText(
+    context,
+    "18px \"Segoe UI\", Arial, sans-serif",
+    `Final carbon: ${state.carbon}  |  Health: ${state.health}  |  Resilience: ${state.resilience}`,
+    WHITE,
+    WIDTH / 2,
+    260
+  );
 
-  context.fillStyle = "#1f2937";
+  [state.player1, state.player2].forEach((player, index) => {
+    const x = 260 + index * 410;
+    drawPanel(context, x, 320, 350, 210, 16, PANEL_2, index === 0 ? GREEN : PURPLE);
+    drawCenteredText(context, "700 30px \"Segoe UI\", Arial, sans-serif", player.name, index === 0 ? GREEN : PURPLE, x + 175, 350);
+    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Score: ${scores[index]}`, WHITE, x + 35, 395);
+    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Budget: ${formatBudget(player.budget)}`, WHITE, x + 35, 425);
+    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Eco / Quick: ${player.ecoChoices} / ${player.quickChoices}`, WHITE, x + 35, 455);
+    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Policies: ${player.policies.length}`, WHITE, x + 35, 485);
+  });
+}
+
+function drawBoard(context: CanvasRenderingContext2D, state: GameState) {
+  drawPanel(context, 35, 88, 685, 522, 18, "#0e1825", "#374b60");
+
+  const centers = BOARD_POSITIONS.map((position) => [position.x + 43, position.y + 43] as const);
+  context.strokeStyle = "#4f6680";
+  context.lineWidth = 5;
   context.beginPath();
-  context.moveTo(0, 430);
-  context.lineTo(160, 320);
-  context.lineTo(300, 380);
-  context.lineTo(460, 300);
-  context.lineTo(640, 368);
-  context.lineTo(820, 310);
-  context.lineTo(900, 370);
-  context.lineTo(900, 720);
-  context.lineTo(0, 720);
+  centers.forEach(([x, y], index) => {
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  });
   context.closePath();
-  context.fill();
+  context.stroke();
 
-  context.fillStyle = "#111827";
-  for (let x = 24; x < 900; x += 82) {
-    const height = 80 + ((x / 18) % 5) * 18;
-    context.fillRect(x, 460 - height, 32 + ((x / 24) % 3) * 10, height);
-  }
+  context.strokeStyle = "#0f172a";
+  context.lineWidth = 2;
+  context.beginPath();
+  centers.forEach(([x, y], index) => {
+    if (index === 0) {
+      context.moveTo(x, y);
+    } else {
+      context.lineTo(x, y);
+    }
+  });
+  context.closePath();
+  context.stroke();
 
-  (Object.keys(zoneBuildings) as Zone[]).forEach((zone) => {
-    const color = scoreColor(state.zoneScores[zone]);
-    zoneBuildings[zone].forEach((building) => {
-      context.fillStyle = color;
-      context.fillRect(building.x, building.y, building.width, building.height);
-      context.strokeStyle = "rgba(9, 14, 24, 0.9)";
-      context.strokeRect(building.x, building.y, building.width, building.height);
-      context.fillStyle = "rgba(255, 220, 120, 0.75)";
-      for (let row = building.y + 12; row < building.y + building.height - 12; row += 18) {
-        for (let col = building.x + 8; col < building.x + building.width - 8; col += 16) {
-          context.fillRect(col, row, 6, 9);
-        }
-      }
+  state.boardTiles.forEach((tile, index) => {
+    const rect = BOARD_POSITIONS[index]!;
+    const color = ZONE_COLORS[tile.zone] ?? BLUE;
+    const active = state.player1.tile === index || state.player2.tile === index;
+    if (active) {
+      drawGlow(context, rect.x, rect.y, rect.width, rect.height, color, 0.42);
+    }
+    roundRectFill(context, rect.x, rect.y + 4, rect.width, rect.height, 14, "#040812");
+    roundRectFill(context, rect.x, rect.y, rect.width, rect.height, 14, color);
+    roundRectFill(context, rect.x, rect.y, rect.width, rect.height / 2, 14, lerpColor(color, WHITE, 0.28));
+    roundRectStroke(context, rect.x, rect.y, rect.width, rect.height, 14, "#0f172a", 3);
+    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", String(index + 1), INK, rect.x + 8, rect.y + 18);
+    drawZoneIcon(context, tile.zone, rect.x + rect.width / 2, rect.y + 34, INK);
+    const lines = wrapText(context, "12px \"Segoe UI\", Arial, sans-serif", tile.zone, rect.width - 10).slice(0, 2);
+    lines.forEach((line, lineIndex) => {
+      drawCenteredText(context, "12px \"Segoe UI\", Arial, sans-serif", line, INK, rect.x + rect.width / 2, rect.y + 62 + lineIndex * 13);
     });
   });
 
-  context.fillStyle = "#374151";
-  context.fillRect(0, 620, 900, 100);
-  context.fillStyle = "#111827";
-  context.fillRect(0, 644, 900, 76);
-  context.strokeStyle = "#94a3b8";
-  context.beginPath();
-  context.moveTo(0, 620);
-  context.lineTo(900, 620);
-  context.stroke();
-  context.fillStyle = "#e5e7eb";
-  for (let x = 0; x < 900; x += 40) {
-    context.fillRect(x, 680, 20, 4);
-  }
+  drawPlayerToken(context, BOARD_POSITIONS[state.player1.tile]!, GREEN, "1", -14);
+  drawPlayerToken(context, BOARD_POSITIONS[state.player2.tile]!, PURPLE, "2", 14);
+}
 
-  for (const x of [52, 210, 372, 528, 690]) {
-    context.fillStyle = "#8b5a2b";
-    context.fillRect(x, 608, 6, 18);
-    context.fillStyle = "#22c55e";
+function drawCityVisual(context: CanvasRenderingContext2D, state: GameState) {
+  const x = 155;
+  const y = 230;
+  const width = 455;
+  const height = 190;
+  const pollution = state.carbon / 100;
+  drawPanel(context, x - 12, y - 12, width + 24, height + 24, 16, "#0c1220", "#374b60");
+
+  const skyTop = lerpColor("#3e84be", "#82464b", pollution);
+  const skyBottom = lerpColor("#fcb268", "#924c45", pollution);
+  const gradient = context.createLinearGradient(0, y, 0, y + height);
+  gradient.addColorStop(0, skyTop);
+  gradient.addColorStop(1, skyBottom);
+  context.fillStyle = gradient;
+  context.fillRect(x, y, width, height);
+
+  context.fillStyle = "rgba(255,218,130,0.95)";
+  context.beginPath();
+  context.arc(x + width - 60, y + 45, 28, 0, Math.PI * 2);
+  context.fill();
+
+  context.fillStyle = "#24303b";
+  context.beginPath();
+  context.moveTo(x, y + height);
+  context.lineTo(x, y + height - 45);
+  context.lineTo(x + 130, y + height - 80);
+  context.lineTo(x + 250, y + height - 54);
+  context.lineTo(x + width, y + height - 95);
+  context.lineTo(x + width, y + height);
+  context.closePath();
+  context.fill();
+
+  [
+    [190, 90],
+    [245, 120],
+    [320, 75],
+    [380, 130],
+    [465, 95],
+    [530, 118]
+  ].forEach(([offsetX, buildingHeight]) => {
+    const bx = offsetX;
+    const buildingX = bx;
+    const buildingY = y + height - buildingHeight;
+    const shade = lerpColor("#2d3748", "#524142", pollution);
+    roundRectFill(context, buildingX, buildingY, 42, buildingHeight, 5, shade);
+    roundRectStroke(context, buildingX, buildingY, 42, buildingHeight, 5, "#0a0f18", 2);
+    context.fillStyle = "#ffe68c";
+    for (let windowY = buildingY + 12; windowY < buildingY + buildingHeight - 10; windowY += 20) {
+      roundRectFill(context, buildingX + 12, windowY, 8, 10, 2, "#ffe68c");
+    }
+  });
+
+  const treeCount = Math.max(1, Math.floor(state.resilience / 12));
+  for (let index = 0; index < treeCount; index += 1) {
+    const treeX = x + 25 + index * 45;
+    context.fillStyle = "#5e3c23";
+    context.fillRect(treeX, y + height - 28, 8, 22);
+    context.fillStyle = GREEN;
     context.beginPath();
-    context.arc(x + 3, 602, 12, 0, Math.PI * 2);
+    context.arc(treeX + 4, y + height - 35, 15, 0, Math.PI * 2);
     context.fill();
   }
 
-  for (const x of [306, 358]) {
-    context.strokeStyle = "#e2e8f0";
-    context.lineWidth = 2;
-    context.beginPath();
-    context.moveTo(x, 610);
-    context.lineTo(x, 568);
-    context.stroke();
-    const rotation = now / 500;
-    for (const offset of [0, Math.PI * 0.66, Math.PI * 1.33]) {
-      context.beginPath();
-      context.moveTo(x, 568);
-      context.lineTo(x + Math.cos(rotation + offset) * 16, 568 + Math.sin(rotation + offset) * 16);
-      context.stroke();
+  context.fillStyle = `rgba(230,80,60,${0.3 * pollution})`;
+  context.fillRect(x, y, width, height);
+  roundRectStroke(context, x, y, width, height, 10, WHITE, 2);
+  drawCenteredText(context, "12px \"Segoe UI\", Arial, sans-serif", "Live city view changes with carbon and resilience", WHITE, x + width / 2, y + height + 16);
+}
+
+function drawMeters(context: CanvasRenderingContext2D, state: GameState) {
+  drawPanel(context, 742, 86, 510, 245, 18, "#0e1726", "#374b60");
+  drawText(context, "700 22px \"Segoe UI\", Arial, sans-serif", "City Dashboard", WHITE, 765, 118);
+  const labels: Array<[string, number, string]> = [
+    ["Carbon", state.carbon, RED],
+    ["Health", state.health, GREEN],
+    ["Resilience", state.resilience, BLUE]
+  ];
+
+  labels.forEach(([label, value, color], index) => {
+    const x = 765;
+    const y = 150 + index * 58;
+    drawText(context, "700 22px \"Segoe UI\", Arial, sans-serif", `${label}: ${value}`, color, x, y);
+    roundRectFill(context, x + 145, y - 9, 320, 18, 10, "#0f172a");
+    roundRectFill(context, x + 147, y - 7, Math.max(0, (316 * value) / 100), 14, 8, color);
+  });
+}
+
+function drawPlayerPanels(context: CanvasRenderingContext2D, state: GameState) {
+  [state.player1, state.player2].forEach((player, index) => {
+    const rectX = 742 + index * 260;
+    const rectY = 338;
+    const accent = index === 0 ? GREEN : PURPLE;
+    const isActive = state.currentPlayer === index + 1;
+    if (isActive) {
+      drawGlow(context, rectX, rectY, 245, 142, accent, 0.32);
     }
+    drawPanel(context, rectX, rectY, 245, 142, 12, PANEL_2, isActive ? accent : "#475569");
+    drawPill(context, rectX + 161, rectY + 14, 62, 22, isActive ? "TURN" : "WAIT", isActive ? accent : "#334155");
+    drawText(context, "700 22px \"Segoe UI\", Arial, sans-serif", player.name, accent, rectX + 16, rectY + 34);
+    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", `Budget: ${formatBudget(player.budget)}`, WHITE, rectX + 16, rectY + 64);
+    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", `Support: ${player.support}`, WHITE, rectX + 16, rectY + 88);
+    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", `Green points: ${player.greenPoints}`, GREEN, rectX + 16, rectY + 112);
+    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", `Policies: ${player.policies.length > 0 ? player.policies.join(", ") : "None"}`.slice(0, 34), MUTED, rectX + 16, rectY + 132);
+  });
+}
+
+function drawDecisionPanel(context: CanvasRenderingContext2D, state: GameState) {
+  drawPanel(context, 742, 490, 510, 150, 12, PANEL_2, "#475569");
+  if (state.selectedEvent) {
+    context.fillStyle = PURPLE;
+    roundRectFill(context, 742, 490, 8, 150, 12, PURPLE);
+    drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", `EVENT: ${state.selectedEvent.title}`, PURPLE, 758, 520);
+    wrapText(context, "15px \"Segoe UI\", Arial, sans-serif", state.selectedEvent.text, 460).slice(0, 3).forEach((line, index) => {
+      drawText(context, "15px \"Segoe UI\", Arial, sans-serif", line, WHITE, 758, 552 + index * 20);
+    });
+    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", "Pick an action", YELLOW, 758, 620);
+    return;
   }
 
-  context.fillStyle = "#94a3b8";
-  context.font = "14px Arial";
-  context.textAlign = "center";
-  context.fillText("Transport", 112, 708);
-  context.fillText("Energy", 312, 708);
-  context.fillText("Waste", 512, 708);
-  context.fillText("Green Space", 712, 708);
+  if (!state.selectedCard) {
+    const activeColor = state.currentPlayer === 1 ? GREEN : PURPLE;
+    drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", `${state.currentPlayer === 1 ? state.player1.name : state.player2.name}'s Turn`, activeColor, 758, 520);
+    drawPill(context, 1114, 504, 108, 24, `Round ${Math.min(state.round, state.maxRounds)}/${state.maxRounds}`, BLUE);
+    drawText(context, "18px \"Segoe UI\", Arial, sans-serif", `Dice: ${state.dice}`, WHITE, 758, 566);
+    return;
+  }
 
-  const turnColor = state.currentPlayer === 1 ? "#00ff88" : "#a78bfa";
-  const turnText = `${state.currentPlayer === 1 ? "Player 1" : "Player 2"}'s Turn`;
-  context.font = "bold 42px Arial";
-  const textWidth = context.measureText(turnText).width;
-  context.fillStyle = "rgba(0,0,0,0.42)";
-  roundRect(context, 450 - textWidth / 2 - 20, 174, textWidth + 40, 52, 26);
-  context.fill();
-  const pulse = Math.sin(now / 400);
-  const alpha = 0.7 + ((pulse + 1) / 2) * 0.3;
-  context.fillStyle = turnColor;
-  context.globalAlpha = alpha;
-  context.beginPath();
-  context.arc(430 - textWidth / 2, 200, 10 + pulse * 2, 0, Math.PI * 2);
-  context.fill();
-  context.fillText(turnText, 450, 212);
-  context.globalAlpha = 1;
+  const card = state.selectedCard;
+  const zoneColor = ZONE_COLORS[card.zone] ?? BLUE;
+  roundRectFill(context, 742, 490, 8, 150, 12, zoneColor);
+  drawText(context, "700 30px \"Segoe UI\", Arial, sans-serif", card.title, zoneColor, 758, 518);
+  drawZoneIcon(context, card.zone, 1220, 522, zoneColor);
 
-  for (let index = particles.length - 1; index >= 0; index -= 1) {
-    const particle = particles[index];
-    particle.life -= dt;
-    if (particle.life <= 0) {
-      particles.splice(index, 1);
-      continue;
-    }
-    particle.x += particle.vx * dt;
-    particle.y += particle.vy * dt;
-    particle.vy += particle.kind === "leaf" ? 12 * dt : -6 * dt;
-    const alphaParticle = particle.life / particle.maxLife;
-    context.globalAlpha = alphaParticle;
-    context.fillStyle = particle.color;
-    context.beginPath();
-    context.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-    context.fill();
-    context.globalAlpha = 1;
+  drawChoiceBox(context, 758, 550, 225, 75, "ECO", "#10502d", "#86efac", card.eco, card.ecoEffect);
+  drawChoiceBox(context, 998, 550, 225, 75, "QUICK", "#641919", "#fecaca", card.quick, card.quickEffect);
+}
+
+function drawActionBar(context: CanvasRenderingContext2D, state: GameState) {
+  const accent = state.currentPlayer === 1 ? GREEN : PURPLE;
+  drawPanel(context, 742, 646, 510, 62, 16, "#0c1422", accent);
+  if (state.selectedCard || state.selectedEvent) {
+    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", "Choose action", YELLOW, 760, 670);
+    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", "Keyboard: 1 or 2", MUTED, 760, 694);
+  } else {
+    drawText(context, "15px \"Segoe UI\", Arial, sans-serif", "Ready", YELLOW, 760, 670);
+    drawText(context, "12px \"Segoe UI\", Arial, sans-serif", "Roll for a district card.", MUTED, 760, 694);
   }
 }
 
-function roundRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
+function drawChoiceBox(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  title: string,
+  background: string,
+  titleColor: string,
+  body: string,
+  effect: [number, number, number, number, number]
+) {
+  drawPanel(context, x, y, width, height, 9, background, background);
+  drawText(context, "700 15px \"Segoe UI\", Arial, sans-serif", title, titleColor, x + 12, y + 18);
+  drawText(context, "12px \"Segoe UI\", Arial, sans-serif", body, WHITE, x + 12, y + 38);
+  drawText(context, "12px \"Segoe UI\", Arial, sans-serif", `Carbon ${effect[0] >= 0 ? "+" : ""}${effect[0]}   Health ${effect[1] >= 0 ? "+" : ""}${effect[1]}`, WHITE, x + 12, y + 55);
+  drawText(context, "12px \"Segoe UI\", Arial, sans-serif", `Cost: ${formatBudget(Math.abs(effect[2]))}`, WHITE, x + 12, y + 68);
+}
+
+function drawPlayerToken(context: CanvasRenderingContext2D, rect: { x: number; y: number; width: number; height: number }, color: string, label: string, offset: number) {
+  const x = rect.x + rect.width / 2 + offset;
+  const y = rect.y + rect.height / 2 + 24;
+  context.fillStyle = "rgba(0,0,0,0.6)";
+  context.beginPath();
+  context.arc(x + 2, y + 3, 16, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = color;
+  context.beginPath();
+  context.arc(x, y, 16, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = WHITE;
+  context.lineWidth = 2;
+  context.beginPath();
+  context.arc(x, y, 16, 0, Math.PI * 2);
+  context.stroke();
+  drawCenteredText(context, "700 15px \"Segoe UI\", Arial, sans-serif", label, WHITE, x, y + 5);
+}
+
+function buildBoardPositions() {
+  const positions: Array<{ x: number; y: number; width: number; height: number }> = [];
+  const left = 55;
+  const top = 110;
+  const size = 86;
+  const gap = 10;
+  for (let index = 0; index < 7; index += 1) {
+    positions.push({ x: left + index * (size + gap), y: top, width: size, height: size });
+  }
+  for (let index = 1; index < 5; index += 1) {
+    positions.push({ x: left + 6 * (size + gap), y: top + index * (size + gap), width: size, height: size });
+  }
+  for (let index = 5; index >= 0; index -= 1) {
+    positions.push({ x: left + index * (size + gap), y: top + 4 * (size + gap), width: size, height: size });
+  }
+  for (let index = 3; index > 0; index -= 1) {
+    positions.push({ x: left, y: top + index * (size + gap), width: size, height: size });
+  }
+  return positions;
+}
+
+function drawGradientBackground(context: CanvasRenderingContext2D) {
+  const top = "#10182d";
+  const mid = "#1a384e";
+  const bottom = "#121622";
+  for (let y = 0; y < HEIGHT; y += 1) {
+    const t = y / HEIGHT;
+    const color = t < 0.62 ? lerpColor(top, mid, Math.min(1, t * 1.4)) : lerpColor(mid, bottom, (t - 0.62) / 0.38);
+    context.strokeStyle = color;
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(WIDTH, y);
+    context.stroke();
+  }
+  context.fillStyle = "rgba(255,255,255,0.9)";
+  for (let index = 0; index < 34; index += 1) {
+    const x = (index * 79 + 31) % WIDTH;
+    const y = 34 + (index * 47) % 230;
+    context.beginPath();
+    context.arc(x, y, 1.2, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+function drawPanel(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number, fill: string, border: string) {
+  roundRectFill(context, x + 5, y + 7, width, height, radius, "#030712");
+  roundRectFill(context, x, y, width, height, radius, fill);
+  roundRectStroke(context, x, y, width, height, radius, border, 2);
+}
+
+function drawPill(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, text: string, color: string) {
+  roundRectFill(context, x, y, width, height, height / 2, color);
+  roundRectStroke(context, x, y, width, height, height / 2, WHITE, 1);
+  drawCenteredText(context, "12px \"Segoe UI\", Arial, sans-serif", text, WHITE, x + width / 2, y + height / 2 + 4);
+}
+
+function drawGlow(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, color: string, alpha: number) {
+  roundRectFill(context, x - 12, y - 12, width + 24, height + 24, 26, withAlpha(color, alpha));
+}
+
+function drawZoneIcon(context: CanvasRenderingContext2D, zone: Zone, centerX: number, centerY: number, color: string) {
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = 3;
+  if (zone === "Transport") {
+    context.beginPath();
+    context.moveTo(centerX, centerY - 12);
+    context.lineTo(centerX - 14, centerY + 10);
+    context.lineTo(centerX + 14, centerY + 10);
+    context.closePath();
+    context.stroke();
+    context.beginPath();
+    context.moveTo(centerX, centerY - 6);
+    context.lineTo(centerX, centerY + 8);
+    context.stroke();
+  } else if (zone === "Energy") {
+    context.beginPath();
+    context.arc(centerX, centerY, 12, 0, Math.PI * 2);
+    context.stroke();
+    [0, 120, 240].forEach((angle) => {
+      const radians = (angle * Math.PI) / 180;
+      context.beginPath();
+      context.moveTo(centerX, centerY);
+      context.lineTo(centerX + Math.cos(radians) * 16, centerY + Math.sin(radians) * 16);
+      context.stroke();
+    });
+  } else if (zone === "Waste") {
+    roundRectStroke(context, centerX - 11, centerY - 9, 22, 20, 4, color, 3);
+    context.beginPath();
+    context.moveTo(centerX - 14, centerY - 12);
+    context.lineTo(centerX + 14, centerY - 12);
+    context.stroke();
+  } else if (zone === "Green Space") {
+    context.beginPath();
+    context.ellipse(centerX, centerY, 14, 10, 0, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(centerX - 8, centerY + 7);
+    context.lineTo(centerX + 9, centerY - 7);
+    context.stroke();
+  } else if (zone === "Consumption") {
+    roundRectStroke(context, centerX - 13, centerY - 6, 26, 18, 3, color, 3);
+    context.beginPath();
+    context.arc(centerX, centerY - 7, 8, Math.PI, Math.PI * 2);
+    context.stroke();
+  } else {
+    context.beginPath();
+    context.arc(centerX - 8, centerY - 2, 7, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.arc(centerX + 8, centerY - 2, 7, 0, Math.PI * 2);
+    context.stroke();
+    context.beginPath();
+    context.arc(centerX, centerY + 10, 18, 0, Math.PI);
+    context.stroke();
+  }
+}
+
+function roundRectFill(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number, color: string) {
+  context.fillStyle = color;
   context.beginPath();
   context.moveTo(x + radius, y);
   context.arcTo(x + width, y, x + width, y + height, radius);
@@ -425,4 +645,103 @@ function roundRect(context: CanvasRenderingContext2D, x: number, y: number, widt
   context.arcTo(x, y + height, x, y, radius);
   context.arcTo(x, y, x + width, y, radius);
   context.closePath();
+  context.fill();
 }
+
+function roundRectStroke(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number, color: string, lineWidth: number) {
+  context.strokeStyle = color;
+  context.lineWidth = lineWidth;
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.arcTo(x + width, y, x + width, y + height, radius);
+  context.arcTo(x + width, y + height, x, y + height, radius);
+  context.arcTo(x, y + height, x, y, radius);
+  context.arcTo(x, y, x + width, y, radius);
+  context.closePath();
+  context.stroke();
+}
+
+function drawText(context: CanvasRenderingContext2D, font: string, text: string, color: string, x: number, y: number) {
+  context.font = font;
+  context.textAlign = "left";
+  context.textBaseline = "middle";
+  if (!font.startsWith("12px") && color !== MUTED) {
+    context.fillStyle = "rgba(0,0,0,0.6)";
+    context.fillText(text, x + 2, y + 2);
+  }
+  context.fillStyle = color;
+  context.fillText(text, x, y);
+}
+
+function drawCenteredText(context: CanvasRenderingContext2D, font: string, text: string, color: string, x: number, y: number) {
+  context.font = font;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  if (!font.startsWith("12px") && color !== MUTED) {
+    context.fillStyle = "rgba(0,0,0,0.6)";
+    context.fillText(text, x + 2, y + 2);
+  }
+  context.fillStyle = color;
+  context.fillText(text, x, y);
+}
+
+function wrapText(context: CanvasRenderingContext2D, font: string, text: string, maxWidth: number) {
+  context.font = font;
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  words.forEach((word) => {
+    const test = current ? `${current} ${word}` : word;
+    if (context.measureText(test).width <= maxWidth) {
+      current = test;
+    } else {
+      if (current) {
+        lines.push(current);
+      }
+      current = word;
+    }
+  });
+  if (current) {
+    lines.push(current);
+  }
+  return lines;
+}
+
+function lerpColor(start: string, end: string, t: number) {
+  const a = hexToRgb(start);
+  const b = hexToRgb(end);
+  return `rgb(${Math.round(a.r + (b.r - a.r) * t)}, ${Math.round(a.g + (b.g - a.g) * t)}, ${Math.round(a.b + (b.b - a.b) * t)})`;
+}
+
+function withAlpha(color: string, alpha: number) {
+  const rgb = hexToRgb(color);
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+}
+
+function hexToRgb(color: string) {
+  const hex = color.replace("#", "");
+  const value = parseInt(hex, 16);
+  return {
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255
+  };
+}
+
+function buttonStyle(x: number, y: number, width: number, height: number, color: string, disabled = false): CSSProperties {
+  return {
+    position: "absolute",
+    left: x,
+    top: y,
+    width,
+    height,
+    borderRadius: 20,
+    border: "2px solid rgba(255,255,255,0.8)",
+    background: disabled ? "rgba(71,85,105,0.5)" : color,
+    color: WHITE,
+    font: `700 15px ${FONT_FAMILY}`,
+    boxShadow: disabled ? "none" : "0 6px 0 rgba(0,0,0,0.3)",
+    cursor: disabled ? "not-allowed" : "pointer"
+  };
+}
+

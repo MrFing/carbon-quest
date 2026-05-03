@@ -1,39 +1,28 @@
 import { useCallback, useState } from "react";
 
-import { createInitialState, makeChoice } from "../game/gameLogic";
+import { createInitialState, makeChoice, rollDice } from "../game/gameLogic";
 import type { ChoiceType, GameState } from "../game/types";
 
 export function useGameState() {
   const [state, setState] = useState<GameState>(() => createInitialState());
-  const [showBankruptcyOverlay, setShowBankruptcyOverlay] = useState(false);
+
+  const rollLocalDice = useCallback(() => {
+    setState((current) => rollDice(current));
+  }, []);
 
   const makeLocalChoice = useCallback((choice: ChoiceType) => {
-    let shouldShowOverlay = false;
-    setState((current) => {
-      const next = makeChoice(current, choice);
-      shouldShowOverlay = next.gameOver && next.gameOverReason === "bankruptcy";
-      return next;
-    });
-    if (shouldShowOverlay) {
-      setShowBankruptcyOverlay(true);
-    }
+    setState((current) => makeChoice(current, choice));
   }, []);
 
   const resetGame = useCallback(() => {
     setState(createInitialState());
-    setShowBankruptcyOverlay(false);
-  }, []);
-
-  const dismissBankruptcyOverlay = useCallback(() => {
-    setShowBankruptcyOverlay(false);
   }, []);
 
   return {
     state,
     setState,
+    rollLocalDice,
     makeLocalChoice,
-    resetGame,
-    showBankruptcyOverlay,
-    dismissBankruptcyOverlay
+    resetGame
   };
 }

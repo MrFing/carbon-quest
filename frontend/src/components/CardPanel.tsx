@@ -12,10 +12,12 @@ interface CardPanelProps {
 }
 
 const zoneColors: Record<DecisionCard["zone"], string> = {
-  transport: "#1d4ed8",
-  energy: "#ca8a04",
-  waste: "#92400e",
-  greenspace: "#166534"
+  "Transport": "#1d4ed8",
+  "Energy": "#ca8a04",
+  "Waste": "#92400e",
+  "Green Space": "#166534",
+  "Consumption": "#f472b6",
+  "Community": "#fb923c"
 };
 
 export default function CardPanel({ card, currentBudget, canPlay, disabledMessage, onChoice }: CardPanelProps) {
@@ -75,7 +77,7 @@ export default function CardPanel({ card, currentBudget, canPlay, disabledMessag
           fontWeight: 800
         }}
       >
-        <div style={{ width: 20, height: 20, borderRadius: card.zone === "energy" ? "50%" : 4, border: "2px solid rgba(15,23,42,0.9)" }} />
+        <div style={{ width: 20, height: 20, borderRadius: card.zone === "Energy" ? "50%" : 4, border: "2px solid rgba(15,23,42,0.9)" }} />
         {card.zone.toUpperCase()}
       </div>
 
@@ -132,7 +134,7 @@ export default function CardPanel({ card, currentBudget, canPlay, disabledMessag
             opacity: canPlay ? 1 : 0.4
           }}
         >
-          🌿 ECO CHOICE
+          Eco Choice
         </button>
         <button
           onClick={() => onChoice("quick")}
@@ -149,7 +151,7 @@ export default function CardPanel({ card, currentBudget, canPlay, disabledMessag
             opacity: canPlay ? 1 : 0.4
           }}
         >
-          ⚡ QUICK CHOICE
+          Quick Choice
         </button>
       </div>
 

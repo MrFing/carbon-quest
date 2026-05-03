@@ -1,32 +1,56 @@
-export type Zone = "transport" | "energy" | "waste" | "greenspace";
+export type Zone = "Transport" | "Energy" | "Waste" | "Green Space" | "Consumption" | "Community";
 export type ChoiceType = "eco" | "quick";
 export type Winner = 1 | 2 | "draw" | null;
-export type GameOverReason = "bankruptcy" | "collapse" | "health" | "rounds_complete" | null;
-export type GamePhase = "playing" | "gameover";
+export type GameOverReason = "bankruptcy" | "collapse" | "rounds_complete" | null;
+export type GamePhase = "play" | "end";
+export type EffectTuple = [number, number, number, number, number];
 
-export interface Choice {
+export interface ChoiceSummary {
   label: string;
   carbonDelta: number;
   healthDelta: number;
   cost: number;
+  supportDelta: number;
+  greenPoints: number;
 }
 
 export interface DecisionCard {
   id: string;
-  zone: Zone;
   title: string;
-  ecoChoice: Choice;
-  quickChoice: Choice;
+  zone: Zone;
+  eco: string;
+  quick: string;
+  ecoEffect: EffectTuple;
+  quickEffect: EffectTuple;
+  fact: string;
+  ecoChoice: ChoiceSummary;
+  quickChoice: ChoiceSummary;
+}
+
+export interface EventCard {
+  id: string;
+  title: string;
+  text: string;
+  effect: EffectTuple;
+}
+
+export interface Tile {
+  index: number;
+  zone: Zone;
 }
 
 export interface PlayerState {
   name: string;
   budget: number;
+  support: number;
+  greenPoints: number;
   ecoChoices: number;
   quickChoices: number;
-  carbonContribution: number;
-  bankrupt: boolean;
+  policies: string[];
+  tile: number;
   decisions: number;
+  bankrupt: boolean;
+  carbonContribution: number;
 }
 
 export interface LastMove {
@@ -35,33 +59,41 @@ export interface LastMove {
   zone: Zone;
   cardId: string;
   choiceLabel: string;
-  carbonDelta: number;
-  healthDelta: number;
-  cost: number;
+  effect: EffectTuple;
   timestamp: number;
 }
 
 export interface GameState {
   round: number;
+  maxRounds: number;
   currentPlayer: 1 | 2;
-  carbonLevel: number;
-  cityHealth: number;
+  carbon: number;
+  health: number;
+  resilience: number;
+  dice: number;
+  message: string;
   player1: PlayerState;
   player2: PlayerState;
-  currentCard: DecisionCard;
-  zoneScores: Record<Zone, number>;
+  boardTiles: Tile[];
+  selectedCard: DecisionCard | null;
+  selectedEvent: EventCard | null;
   gameOver: boolean;
   gameOverReason: GameOverReason;
   winner: Winner;
+  scores: [number, number] | null;
   phase: GamePhase;
   lastMove: LastMove | null;
+  carbonLevel: number;
+  cityHealth: number;
+  currentCard: DecisionCard | null;
+  zoneScores: Record<string, number>;
 }
 
 export interface WinnerSummary {
   winner: Winner;
-  reason: string | null;
-  loserName: string | null;
   winnerName: string | null;
+  loserName: string | null;
+  reason: string | null;
 }
 
 export interface EndSummary {
@@ -86,6 +118,7 @@ export type ServerMessage =
   | { type: "ERROR"; message: string };
 
 export type ClientMessage =
+  | { type: "ROLL_DICE" }
   | { type: "MAKE_CHOICE"; choice: ChoiceType }
   | { type: "PLAY_AGAIN" }
   | { type: "QUIT" };

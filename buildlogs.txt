@@ -92,3 +92,14 @@ Note: Earlier edits were reconstructed from the build session history and record
 - Added root and `/health` backend endpoints so infrastructure probes no longer hit only 404 responses.
 - Switched party-code generation to a less ambiguous character set to reduce `O` versus `0` and similar join mistakes.
 - Verified backend syntax with `py_compile` and verified the frontend with a successful production `npm run build`.
+
+[2026-05-03 19:03:07 +05:30] HISTORY ENTRY 15 - Board-and-dice gameplay web parity pass
+- Reworked the shared web gameplay state from the newer carbon-card session model back to the older board-driven Carbon Quest flow with dice rolls, tile movement, district-specific decisions, support, resilience, green points, and policy unlocks.
+- Recreated the older in-game interface inside the shared canvas renderer: top message bar, top-right Rules button, board loop, live city preview, city dashboard bars, player status panels, district decision cards, and bottom action bar.
+- Added the old keyboard and turn flow to the web game: roll first, then choose Eco Plan or Quick Fix, with the same round progression and same win/loss logic as the pasted legacy `main.py`.
+- Added the matching rule-sheet overlay content from the legacy desktop script so the same rules can be opened from the top-right corner during play.
+- Replaced the backend gameplay contract so online sessions now use the same dice-based board state machine as local play instead of the previous always-open decision-card flow.
+- Extended the backend WebSocket handler with `ROLL_DICE` support while preserving the newer reconnect-grace, party creation, and session-revocation behavior from the existing online architecture.
+- Updated shared frontend and backend game-state types so both local mode and online mode serialize the same board tiles, player stats, selected card state, dashboard values, scores, and end-game data.
+- Patched leftover compatibility components to compile with the new title-cased zone names used by the restored board-game rules.
+- Verified the updated backend with `py_compile` and verified the updated frontend with a successful production `npm run build`.

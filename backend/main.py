@@ -150,7 +150,14 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, player: int)
             payload = await websocket.receive_json()
             message_type = payload.get("type")
 
-            if message_type == "MAKE_CHOICE":
+            if message_type == "ROLL_DICE":
+                try:
+                    state = session.game.roll_dice(player)
+                except ValueError as exc:
+                    await safe_send(websocket, ErrorMessage(message=str(exc)).model_dump())
+                    continue
+                await broadcast(session, {"type": "STATE_UPDATE", "state": state})
+            elif message_type == "MAKE_CHOICE":
                 try:
                     state = session.game.make_choice(player, payload.get("choice"))
                 except ValueError as exc:
@@ -190,4 +197,3 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str, player: int)
         if current_session is not None and current_session.get_socket(player) is websocket:
             token = current_session.mark_disconnected(player)
             asyncio.create_task(finalize_disconnect(session_id, player, token))
-
