@@ -506,7 +506,7 @@ function renderEndOverlay(state: GameState) {
       </div>
 
       {[state.player1, state.player2].map((player, index) => {
-        const left = 260 + index * 410;
+        const left = 115 + index * 410;
         const accent = index === 0 ? GREEN : PURPLE;
         return (
           <div key={player.name} style={overlayPanelStyle(left, 320, 350, 210, 16, PANEL_FILL, accent)}>
