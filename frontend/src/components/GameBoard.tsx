@@ -151,6 +151,7 @@ export default function GameBoard({ state, canPlay, disabledMessage, onRoll, onC
 
           {state.gameOver && !showRules ? (
             <>
+              {renderEndOverlay(state)}
               <button style={buttonStyle(525, 640, 140, 44, GREEN)} onClick={onPlayAgain}>
                 Restart
               </button>
@@ -478,6 +479,55 @@ function renderPlayerToken(player: PlayerState, color: string, label: string, of
       }}
     >
       {label}
+    </div>
+  );
+}
+
+function renderEndOverlay(state: GameState) {
+  const scores = state.scores ?? calculateScores(state);
+  const winner = state.winner;
+  const title = state.carbon < 80 && state.health > 0 ? "City Survived!" : "Challenge Ended";
+  const titleColor = state.carbon < 80 && state.health > 0 ? GREEN : RED;
+  const winnerColor = winner === "draw" ? YELLOW : winner === 1 ? GREEN : PURPLE;
+
+  return (
+    <div style={overlayPanelStyle(145, 50, 990, 610, 24, "#0e1826", "#4ade80")}>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 18, textAlign: "center", color: titleColor, font: `800 46px ${FONT_FAMILY}` }}>
+        {title}
+      </div>
+      <div style={{ position: "absolute", left: 60, right: 60, top: 78, textAlign: "center", color: WHITE, font: `700 22px ${FONT_FAMILY}` }}>
+        {state.message}
+      </div>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 140, textAlign: "center", color: winnerColor, font: `700 30px ${FONT_FAMILY}` }}>
+        {winner === "draw" ? "It is a draw!" : `${winner === 1 ? state.player1.name : state.player2.name} wins!`}
+      </div>
+      <div style={{ position: "absolute", left: 0, right: 0, top: 194, textAlign: "center", color: WHITE, font: `18px ${FONT_FAMILY}` }}>
+        Final carbon: {state.carbon}  |  Health: {state.health}  |  Resilience: {state.resilience}
+      </div>
+
+      {[state.player1, state.player2].map((player, index) => {
+        const left = 260 + index * 410;
+        const accent = index === 0 ? GREEN : PURPLE;
+        return (
+          <div key={player.name} style={overlayPanelStyle(left, 320, 350, 210, 16, PANEL_FILL, accent)}>
+            <div style={{ position: "absolute", left: 0, right: 0, top: 18, textAlign: "center", color: accent, font: `700 30px ${FONT_FAMILY}` }}>
+              {player.name}
+            </div>
+            <div style={{ position: "absolute", left: 35, top: 75, color: WHITE, font: `18px ${FONT_FAMILY}` }}>
+              Score: {scores[index]}
+            </div>
+            <div style={{ position: "absolute", left: 35, top: 105, color: WHITE, font: `18px ${FONT_FAMILY}` }}>
+              Budget: {formatBudget(player.budget)}
+            </div>
+            <div style={{ position: "absolute", left: 35, top: 135, color: WHITE, font: `18px ${FONT_FAMILY}` }}>
+              Eco / Quick: {player.ecoChoices} / {player.quickChoices}
+            </div>
+            <div style={{ position: "absolute", left: 35, top: 165, color: WHITE, font: `18px ${FONT_FAMILY}` }}>
+              Policies: {player.policies.length}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
